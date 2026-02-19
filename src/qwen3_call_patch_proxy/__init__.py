@@ -338,6 +338,10 @@ async def handle_request(request: web.Request):
     # Generate unique request ID for correlation
     request_id = str(uuid.uuid4())[:8]
     target_url = f"{request.app['target_url']}{request.rel_url}"
+    verbose = request.app.get('verbose', False)
+    start_time = datetime.now()
+
+    console_logger.info(f"[{request_id}] --> {request.method} {request.rel_url}")
     logger.debug(f"[{request_id}] --> {request.method} {request.rel_url}")
 
     # Create request state
@@ -358,6 +362,9 @@ async def handle_request(request: web.Request):
         async with aiohttp.ClientSession() as session:
             async with session.request(method=request.method, url=target_url,
                                        headers=headers, data=data, allow_redirects=False) as resp:
+                elapsed = int((datetime.now() - start_time).total_seconds() * 1000)
+                console_logger.info(
+                    f"[{request_id}] <-- {resp.status} {resp.reason} ({elapsed}ms)")
                 logger.debug(
                     f"[{request_id}] <-- {resp.status} {resp.reason} from backend")
 
@@ -413,6 +420,9 @@ async def handle_request(request: web.Request):
                                 logger.debug(
                                     f"[{request_id}] SSE Tool Call {i}: {json.dumps(tool_call, indent=2)}")
 
+                        if verbose:
+                            console_logger.info(
+                                f"[{request_id}] SSE >> {new_payload}")
                         await response.write(f"data: {new_payload}\n\n".encode("utf-8"))
                     except aiohttp.client_exceptions.ClientConnectionResetError:
                         logger.warning(
@@ -1058,10 +1068,17 @@ def main():
         default=DEFAULT_LISTEN_PORT,
         help=f"Port to listen on (default: {DEFAULT_LISTEN_PORT})",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Log each SSE stream response returned to the client",
+    )
     args = parser.parse_args()
 
     app = web.Application()
     app['target_url'] = args.target_url
+    app['verbose'] = args.verbose
 
     # Add health and management endpoints
     app.router.add_get('/_health', health_check)
@@ -1075,6 +1092,8 @@ def main():
     console_logger.info(f"   🎯 Target: {args.target_url}")
     console_logger.info(f"   ⚙️  Config: {CONFIG_FILE}")
     console_logger.info(f"   📝 Log: {LOG_FILE}")
+    if args.verbose:
+        console_logger.info(f"   🔊 Verbose: SSE stream logging enabled")
     logger.info(f"   Health check: http://localhost:{args.port}/_health")
     logger.info(f"   Reload config: POST http://localhost:{args.port}/_reload")
 
