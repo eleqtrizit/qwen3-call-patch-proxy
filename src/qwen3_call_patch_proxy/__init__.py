@@ -32,11 +32,10 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 import uuid
 
-# === CONFIGURATION ===
-# Target server running your Qwen3-Coder model
-TARGET_HOST = "http://127.0.0.1:8080"
-# Port where this proxy will listen for incoming requests
-LISTEN_PORT = 7999
+# === CONFIGURATION DEFAULTS ===
+DEFAULT_TARGET_URL = "http://127.0.0.1:8080"
+DEFAULT_LISTEN_PORT = 7999
+DEFAULT_LISTEN_HOST = "0.0.0.0"
 # Logging level: DEBUG for full trace, INFO for production
 LOG_LEVEL = logging.DEBUG
 # YAML configuration file bundled with the package
@@ -47,13 +46,15 @@ LOG_FILE = Path(tempfile.gettempdir()) / "proxy_detailed.log"
 # Console logger - for tool calls and proxy changes only
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
-console_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+console_formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(message)s")
 console_handler.setFormatter(console_formatter)
 
 # File logger - for all detailed communication
 file_handler = logging.FileHandler(LOG_FILE)
 file_handler.setLevel(logging.DEBUG)
-file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s:%(lineno)d] %(message)s")
+file_formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s:%(lineno)d] %(message)s")
 file_handler.setFormatter(file_formatter)
 
 # Main logger
@@ -67,6 +68,7 @@ console_logger = logging.getLogger("console")
 console_logger.setLevel(logging.INFO)
 console_logger.addHandler(console_handler)
 console_logger.propagate = False
+
 
 @dataclass
 class ToolBuffer:
@@ -90,6 +92,7 @@ class ToolBuffer:
     def size(self) -> int:
         return len(self.content.encode('utf-8'))
 
+
 @dataclass
 class RequestState:
     """Per-request state management"""
@@ -104,8 +107,10 @@ class RequestState:
             if buffer.is_expired(timeout_seconds)
         ]
         for call_id in expired_ids:
-            logger.warning(f"[{self.request_id}] Cleaning up expired buffer: {call_id}")
+            logger.warning(
+                f"[{self.request_id}] Cleaning up expired buffer: {call_id}")
             del self.tool_buffers[call_id]
+
 
 class ToolFixEngine:
     """
@@ -131,14 +136,16 @@ class ToolFixEngine:
         """Initialize the fix engine with configuration from YAML file."""
         self.config = self._load_config(config_file)
         self.settings = self.config.get('settings', {})
-        logger.info(f"Loaded tool fix configuration with {len(self.config.get('tools', {}))} tools")
+        logger.info(
+            f"Loaded tool fix configuration with {len(self.config.get('tools', {}))} tools")
 
     def _load_config(self, config_file: str) -> Dict[str, Any]:
         try:
             with open(config_file, 'r') as f:
                 return yaml.safe_load(f)
         except FileNotFoundError:
-            logger.warning(f"Config file {config_file} not found, using defaults")
+            logger.warning(
+                f"Config file {config_file} not found, using defaults")
             return self._get_default_config()
         except Exception as e:
             logger.error(f"Failed to load config: {e}, using defaults")
@@ -186,7 +193,8 @@ class ToolFixEngine:
     def get_setting(self, key: str, default=None):
         return self.settings.get(key, default)
 
-    def apply_fixes(self, tool_name: str, args_obj: Dict[str, Any], request_id: str) -> tuple[str, Dict[str, Any]]:
+    def apply_fixes(self, tool_name: str,
+                    args_obj: Dict[str, Any], request_id: str) -> tuple[str, Dict[str, Any]]:
         """Apply configured fixes to tool arguments. Returns (possibly_changed_tool_name, fixed_args)"""
         if not self.settings.get('case_sensitive_tools', False):
             tool_name = tool_name.lower()
@@ -195,7 +203,8 @@ class ToolFixEngine:
         fixes = tool_config.get('fixes', [])
 
         if not fixes:
-            logger.debug(f"[{request_id}] No fixes configured for tool: {tool_name}")
+            logger.debug(
+                f"[{request_id}] No fixes configured for tool: {tool_name}")
             return tool_name, args_obj
 
         result = args_obj.copy()
@@ -214,14 +223,18 @@ class ToolFixEngine:
 
         if applied_fixes:
             if final_tool_name != tool_name:
-                console_logger.info(f"[{request_id}] 🔄 Converted {tool_name}→{final_tool_name}: {', '.join(applied_fixes)}")
+                console_logger.info(
+                    f"[{request_id}] 🔄 Converted {tool_name}→{final_tool_name}: {', '.join(applied_fixes)}")
             else:
-                console_logger.info(f"[{request_id}] 🔧 Fixed {tool_name}: {', '.join(applied_fixes)}")
-            logger.info(f"[{request_id}] Applied fixes to {tool_name}: {applied_fixes}")
+                console_logger.info(
+                    f"[{request_id}] 🔧 Fixed {tool_name}: {', '.join(applied_fixes)}")
+            logger.info(
+                f"[{request_id}] Applied fixes to {tool_name}: {applied_fixes}")
 
         return final_tool_name, result
 
-    def _apply_single_fix(self, args_obj: Dict[str, Any], fix: Dict[str, Any], request_id: str):
+    def _apply_single_fix(
+            self, args_obj: Dict[str, Any], fix: Dict[str, Any], request_id: str):
         """Apply a single fix rule. Returns bool or (new_tool_name, bool) for tool conversions"""
         param = fix['parameter']
         condition = fix['condition']
@@ -241,8 +254,10 @@ class ToolFixEngine:
                         # Try to fix common JSON issues like single quotes
                         fixed_json = self._fix_malformed_json(args_obj[param])
                         args_obj[param] = json.loads(fixed_json)
-                        console_logger.info(f"[{request_id}] 🔧 Fixed malformed JSON for {param}")
-                        logger.debug(f"[{request_id}] Fixed malformed JSON for {param}: {str(args_obj[param])[:100]}...")
+                        console_logger.info(
+                            f"[{request_id}] 🔧 Fixed malformed JSON for {param}")
+                        logger.debug(
+                            f"[{request_id}] Fixed malformed JSON for {param}: {str(args_obj[param])[:100]}...")
             elif action == 'set_default':
                 args_obj[param] = fix['default_value']
             elif action == 'parse_json_object':
@@ -261,7 +276,8 @@ class ToolFixEngine:
                     # Keep both filePath and content for write tool
                     return ('write', True)
                 else:
-                    logger.warning(f"[{request_id}] Cannot convert to write: missing filePath or content")
+                    logger.warning(
+                        f"[{request_id}] Cannot convert to write: missing filePath or content")
                     return False
             return True
         except Exception as e:
@@ -272,7 +288,8 @@ class ToolFixEngine:
                 return True
         return False
 
-    def _check_condition(self, args_obj: Dict[str, Any], param: str, condition: str, fix: Dict[str, Any]) -> bool:
+    def _check_condition(
+            self, args_obj: Dict[str, Any], param: str, condition: str, fix: Dict[str, Any]) -> bool:
         """Check if condition is met for applying fix"""
         value = args_obj.get(param)
 
@@ -295,7 +312,8 @@ class ToolFixEngine:
         if not json_str:
             return json_str
 
-        # Fix single quotes to double quotes, but be careful about quotes inside strings
+        # Fix single quotes to double quotes, but be careful about quotes
+        # inside strings
         fixed = json_str
 
         # Simple approach: replace single quotes with double quotes
@@ -315,10 +333,11 @@ class ToolFixEngine:
 fix_engine = ToolFixEngine(CONFIG_FILE)
 request_states: Dict[str, RequestState] = {}
 
+
 async def handle_request(request: web.Request):
     # Generate unique request ID for correlation
     request_id = str(uuid.uuid4())[:8]
-    target_url = f"{TARGET_HOST}{request.rel_url}"
+    target_url = f"{request.app['target_url']}{request.rel_url}"
     logger.debug(f"[{request_id}] --> {request.method} {request.rel_url}")
 
     # Create request state
@@ -332,16 +351,20 @@ async def handle_request(request: web.Request):
 
     data = await request.read() if request.can_read_body else None
     if data and fix_engine.get_setting('detailed_logging', True):
-        logger.debug(f"[{request_id}] Request body ({len(data)} bytes): {data[:500]!r}")
+        logger.debug(
+            f"[{request_id}] Request body ({len(data)} bytes): {data[:500]!r}")
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.request(method=request.method, url=target_url,
                                        headers=headers, data=data, allow_redirects=False) as resp:
-                logger.debug(f"[{request_id}] <-- {resp.status} {resp.reason} from backend")
+                logger.debug(
+                    f"[{request_id}] <-- {resp.status} {resp.reason} from backend")
 
-                response = web.StreamResponse(status=resp.status, reason=resp.reason, headers=resp.headers)
-                for hop in ("transfer-encoding", "connection", "content-length"):
+                response = web.StreamResponse(
+                    status=resp.status, reason=resp.reason, headers=resp.headers)
+                for hop in ("transfer-encoding", "connection",
+                            "content-length"):
                     response.headers.pop(hop, None)
                 await response.prepare(request)
 
@@ -358,9 +381,11 @@ async def handle_request(request: web.Request):
 
                     payload = line[len("data:"):].strip()
                     if payload == "[DONE]":
-                        # Process any remaining incomplete buffers before cleanup
+                        # Process any remaining incomplete buffers before
+                        # cleanup
                         await process_remaining_buffers(request_id, response)
-                        logger.debug(f"[{request_id}] Stream ended, cleaning up buffers")
+                        logger.debug(
+                            f"[{request_id}] Stream ended, cleaning up buffers")
                         await cleanup_request(request_id)
                         await response.write(raw_line)
                         continue
@@ -368,38 +393,47 @@ async def handle_request(request: web.Request):
                     try:
                         event = json.loads(payload)
                     except json.JSONDecodeError as e:
-                        logger.warning(f"[{request_id}] Invalid JSON in SSE: {e}")
+                        logger.warning(
+                            f"[{request_id}] Invalid JSON in SSE: {e}")
                         await response.write(raw_line)
                         continue
 
                     try:
                         fixed_event = await process_sse_event(event, request_id)
-                        new_payload = json.dumps(fixed_event, ensure_ascii=False)
+                        new_payload = json.dumps(
+                            fixed_event, ensure_ascii=False)
 
                         # Log detailed SSE output for debugging (file only)
-                        logger.debug(f"[{request_id}] SSE Event: {json.dumps(fixed_event, indent=2)}")
-                        if "tool_calls" in fixed_event.get("choices", [{}])[0].get("delta", {}):
+                        logger.debug(
+                            f"[{request_id}] SSE Event: {json.dumps(fixed_event, indent=2)}")
+                        if "tool_calls" in fixed_event.get("choices", [{}])[
+                                0].get("delta", {}):
                             tool_calls = fixed_event["choices"][0]["delta"]["tool_calls"]
                             for i, tool_call in enumerate(tool_calls):
-                                logger.debug(f"[{request_id}] SSE Tool Call {i}: {json.dumps(tool_call, indent=2)}")
+                                logger.debug(
+                                    f"[{request_id}] SSE Tool Call {i}: {json.dumps(tool_call, indent=2)}")
 
                         await response.write(f"data: {new_payload}\n\n".encode("utf-8"))
                     except aiohttp.client_exceptions.ClientConnectionResetError:
-                        logger.warning(f"[{request_id}] Client connection reset, stopping stream")
+                        logger.warning(
+                            f"[{request_id}] Client connection reset, stopping stream")
                         break
                     except Exception as e:
-                        logger.error(f"[{request_id}] Error processing SSE event: {e}")
+                        logger.error(
+                            f"[{request_id}] Error processing SSE event: {e}")
                         # Write original event on processing error
                         await response.write(raw_line)
 
                 await response.write_eof()
                 return response
     except aiohttp.client_exceptions.ServerDisconnectedError:
-        logger.info(f"[{request_id}] Backend server disconnected - this is normal when client interrupts")
+        logger.info(
+            f"[{request_id}] Backend server disconnected - this is normal when client interrupts")
         # Return a proper HTTP response for disconnections
         return web.Response(status=502, text="Backend server disconnected")
     except aiohttp.client_exceptions.ClientConnectionResetError:
-        logger.info(f"[{request_id}] Client connection reset - this is normal when client disconnects")
+        logger.info(
+            f"[{request_id}] Client connection reset - this is normal when client disconnects")
         # Client disconnected, nothing to return
         return web.Response(status=499, text="Client disconnected")
     except Exception as e:
@@ -413,13 +447,15 @@ async def handle_request(request: web.Request):
         except Exception as cleanup_error:
             logger.warning(f"[{request_id}] Cleanup error: {cleanup_error}")
 
+
 async def periodic_cleanup(request_id: str):
     """Periodically clean up expired buffers for a request"""
     timeout = fix_engine.get_setting('buffer_timeout', 30)
 
     while request_id in request_states:
         try:
-            await asyncio.sleep(timeout // 3)  # Check every 1/3 of timeout period
+            # Check every 1/3 of timeout period
+            await asyncio.sleep(timeout // 3)
             if request_id in request_states:
                 request_states[request_id].cleanup_expired_buffers(timeout)
         except asyncio.CancelledError:
@@ -427,13 +463,16 @@ async def periodic_cleanup(request_id: str):
         except Exception as e:
             logger.error(f"[{request_id}] Cleanup task error: {e}")
 
+
 async def cleanup_request(request_id: str):
     """Clean up all resources for a request"""
     if request_id in request_states:
         buffer_count = len(request_states[request_id].tool_buffers)
         if buffer_count > 0:
-            logger.debug(f"[{request_id}] Cleaning up {buffer_count} tool buffers")
+            logger.debug(
+                f"[{request_id}] Cleaning up {buffer_count} tool buffers")
         del request_states[request_id]
+
 
 async def process_sse_event(event: dict, request_id: str) -> dict:
     """Intercept delta.tool_calls and accumulate arguments, then fix when complete."""
@@ -457,14 +496,19 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
         request_state.content_buffer += content
 
         # Check if we have a complete XML tool call
-        xml_tool_call = detect_and_convert_xml_tool_call(request_state.content_buffer)
+        xml_tool_call = detect_and_convert_xml_tool_call(
+            request_state.content_buffer)
         if xml_tool_call:
-            console_logger.info(f"[{request_id}] 🔀 XML→JSON: {xml_tool_call['function_name']}")
-            logger.info(f"[{request_id}] Detected XML tool call, converting to JSON format")
+            console_logger.info(
+                f"[{request_id}] 🔀 XML→JSON: {xml_tool_call['function_name']}")
+            logger.info(
+                f"[{request_id}] Detected XML tool call, converting to JSON format")
 
             # Create proper JSON tool call format
             fixed_call_id = f"call_{uuid.uuid4().hex[:24]}"
-            args_str = json.dumps(xml_tool_call["arguments"], ensure_ascii=False)
+            args_str = json.dumps(
+                xml_tool_call["arguments"],
+                ensure_ascii=False)
 
             # Replace content with tool_calls
             delta["tool_calls"] = [{
@@ -481,12 +525,15 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
             # Clear the content buffer since we processed the tool call
             request_state.content_buffer = ""
 
-            logger.debug(f"[{request_id}] Converted XML to JSON tool call: {xml_tool_call['function_name']}")
+            logger.debug(
+                f"[{request_id}] Converted XML to JSON tool call: {xml_tool_call['function_name']}")
         else:
             # Check if buffer is getting too large and clear it periodically
-            max_buffer_size = fix_engine.get_setting('max_buffer_size', 1048576)
+            max_buffer_size = fix_engine.get_setting(
+                'max_buffer_size', 1048576)
             if len(request_state.content_buffer) > max_buffer_size:
-                logger.warning(f"[{request_id}] Content buffer exceeded size limit, clearing")
+                logger.warning(
+                    f"[{request_id}] Content buffer exceeded size limit, clearing")
                 request_state.content_buffer = ""
 
     if "tool_calls" not in delta:
@@ -514,7 +561,8 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
         elif call_id and tool_name and not func.get("arguments", "").strip():
             # This is a named tool call header with empty arguments - likely for fragments
             # Remove it from the delta to prevent it from being sent
-            logger.debug(f"[{request_id}] Suppressing empty named tool call header: {call_id}")
+            logger.debug(
+                f"[{request_id}] Suppressing empty named tool call header: {call_id}")
             # Mark this tool call for removal
             tool["_suppress"] = True
         elif "arguments" in func:
@@ -542,14 +590,16 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
         # Check buffer size limit
         max_size = fix_engine.get_setting('max_buffer_size', 1048576)
         if buffer.size() > max_size:
-            logger.error(f"[{request_id}] Buffer {main_buffer_key} exceeded size limit")
+            logger.error(
+                f"[{request_id}] Buffer {main_buffer_key} exceeded size limit")
             del request_state.tool_buffers[main_buffer_key]
             # Suppress all fragments since buffer is invalid
             delta["tool_calls"] = []
         else:
             if fix_engine.get_setting('detailed_logging', True):
                 total_frag = ''.join([f[1] for f in fragments_in_event])
-                logger.debug(f"[{request_id}] Buffer {main_buffer_key} += {total_frag!r} (total: {len(buffer.content)} chars)")
+                logger.debug(
+                    f"[{request_id}] Buffer {main_buffer_key} += {total_frag!r} (total: {len(buffer.content)} chars)")
 
             # Try to determine tool name from buffer content
             if not buffer.tool_name and buffer.content:
@@ -571,18 +621,25 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
                             "arguments": fixed_args
                         }
                     }]
-                    console_logger.info(f"[{request_id}] 🔧 Tool call: {final_tool_name}")
-                    logger.info(f"[{request_id}] Replaced fragments with complete fixed tool call: {final_tool_name}")
+                    console_logger.info(
+                        f"[{request_id}] 🔧 Tool call: {final_tool_name}")
+                    logger.info(
+                        f"[{request_id}] Replaced fragments with complete fixed tool call: {final_tool_name}")
                     del request_state.tool_buffers[main_buffer_key]
                 else:
-                    # Couldn't get fixed args or tool name, suppress fragments to prevent client errors
+                    # Couldn't get fixed args or tool name, suppress fragments
+                    # to prevent client errors
                     if not buffer.tool_name:
-                        logger.warning(f"[{request_id}] Could not infer tool name from content: {buffer.content[:100]}...")
-                    logger.warning(f"[{request_id}] Failed to get fixed args or tool name, suppressing fragments")
+                        logger.warning(
+                            f"[{request_id}] Could not infer tool name from content: {buffer.content[:100]}...")
+                    logger.warning(
+                        f"[{request_id}] Failed to get fixed args or tool name, suppressing fragments")
                     delta["tool_calls"] = []
             else:
-                # Tool call incomplete, suppress fragments to prevent sending invalid data to client
-                logger.debug(f"[{request_id}] Tool call incomplete, suppressing {len(fragments_in_event)} fragments")
+                # Tool call incomplete, suppress fragments to prevent sending
+                # invalid data to client
+                logger.debug(
+                    f"[{request_id}] Tool call incomplete, suppressing {len(fragments_in_event)} fragments")
                 delta["tool_calls"] = []
 
     # Process named tool calls normally
@@ -605,10 +662,12 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
             buffer.update_content(frag)
 
             if fix_engine.get_setting('detailed_logging', True):
-                logger.debug(f"[{request_id}] Named buffer {call_id} ({buffer.tool_name}) += {frag!r} (total: {len(buffer.content)} chars)")
+                logger.debug(
+                    f"[{request_id}] Named buffer {call_id} ({buffer.tool_name}) += {frag!r} (total: {len(buffer.content)} chars)")
 
             if buffer.content and is_json_complete(buffer.content):
-                console_logger.info(f"[{request_id}] 🔧 Tool call: {buffer.tool_name}")
+                console_logger.info(
+                    f"[{request_id}] 🔧 Tool call: {buffer.tool_name}")
                 await process_complete_buffer(buffer, tool, request_id)
                 del request_state.tool_buffers[call_id]
 
@@ -618,14 +677,17 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
 
     # Remove suppressed tool calls from the event
     if "tool_calls" in delta:
-        delta["tool_calls"] = [tool for tool in delta["tool_calls"] if not tool.get("_suppress")]
+        delta["tool_calls"] = [
+            tool for tool in delta["tool_calls"] if not tool.get("_suppress")]
         # If all tool calls were suppressed, remove the tool_calls key entirely
         if not delta["tool_calls"]:
             del delta["tool_calls"]
 
     return event
 
-async def process_complete_buffer(buffer: ToolBuffer, tool: dict, request_id: str):
+
+async def process_complete_buffer(
+        buffer: ToolBuffer, tool: dict, request_id: str):
     """Process a complete tool call buffer"""
     full_args_str = buffer.content
     tool_name = buffer.tool_name
@@ -633,15 +695,18 @@ async def process_complete_buffer(buffer: ToolBuffer, tool: dict, request_id: st
 
     try:
         args_obj = json.loads(full_args_str)
-        final_tool_name, args_obj = fix_engine.apply_fixes(tool_name, args_obj, request_id)
+        final_tool_name, args_obj = fix_engine.apply_fixes(
+            tool_name, args_obj, request_id)
         fixed_args_str = json.dumps(args_obj, ensure_ascii=False)
 
         # Update tool name if it was converted
         if final_tool_name != tool_name:
             tool["function"]["name"] = final_tool_name
-            logger.debug(f"[{request_id}] Converted tool call {call_id} ({tool_name}→{final_tool_name}): {len(fixed_args_str)} chars")
+            logger.debug(
+                f"[{request_id}] Converted tool call {call_id} ({tool_name}→{final_tool_name}): {len(fixed_args_str)} chars")
         else:
-            logger.debug(f"[{request_id}] Fixed tool call {call_id} ({tool_name}): {len(fixed_args_str)} chars")
+            logger.debug(
+                f"[{request_id}] Fixed tool call {call_id} ({tool_name}): {len(fixed_args_str)} chars")
 
         if fix_engine.get_setting('detailed_logging', True):
             logger.debug(f"[{request_id}] Fixed args: {fixed_args_str}")
@@ -651,19 +716,24 @@ async def process_complete_buffer(buffer: ToolBuffer, tool: dict, request_id: st
         logger.warning(f"[{request_id}] JSON parse failed for {call_id}: {e}")
         # Try to recover with fallback
         if await try_json_recovery(full_args_str, tool, tool_name, request_id):
-            logger.info(f"[{request_id}] Successfully recovered malformed JSON for {call_id}")
+            logger.info(
+                f"[{request_id}] Successfully recovered malformed JSON for {call_id}")
         else:
             # Keep original if recovery fails
-            logger.warning(f"[{request_id}] JSON recovery failed, keeping original")
+            logger.warning(
+                f"[{request_id}] JSON recovery failed, keeping original")
     except Exception as e:
-        logger.error(f"[{request_id}] Failed to process tool call {call_id}: {e}")
+        logger.error(
+            f"[{request_id}] Failed to process tool call {call_id}: {e}")
+
 
 async def process_all_buffers(request_state: RequestState, request_id: str):
     """Process all remaining buffers when tool_calls finish_reason is received"""
     if not request_state.tool_buffers:
         return
 
-    logger.info(f"[{request_id}] Processing {len(request_state.tool_buffers)} remaining buffers")
+    logger.info(
+        f"[{request_id}] Processing {len(request_state.tool_buffers)} remaining buffers")
 
     for call_id, buffer in list(request_state.tool_buffers.items()):
         if buffer.content:
@@ -678,10 +748,12 @@ async def process_all_buffers(request_state: RequestState, request_id: str):
             await process_complete_buffer(buffer, dummy_tool, request_id)
             # Log the final processed arguments
             final_args = dummy_tool["function"]["arguments"]
-            logger.info(f"[{request_id}] Final processed args for {call_id}: {final_args}")
+            logger.info(
+                f"[{request_id}] Final processed args for {call_id}: {final_args}")
 
     # Clear all buffers after processing
     request_state.tool_buffers.clear()
+
 
 async def process_remaining_buffers(request_id: str, response):
     """Process any remaining incomplete buffers before stream end"""
@@ -692,7 +764,8 @@ async def process_remaining_buffers(request_id: str, response):
     if not request_state.tool_buffers:
         return
 
-    logger.info(f"[{request_id}] Processing {len(request_state.tool_buffers)} incomplete buffers before cleanup")
+    logger.info(
+        f"[{request_id}] Processing {len(request_state.tool_buffers)} incomplete buffers before cleanup")
 
     for call_id, buffer in list(request_state.tool_buffers.items()):
         if buffer.content:
@@ -701,7 +774,8 @@ async def process_remaining_buffers(request_id: str, response):
                 fixed_json = await try_fix_incomplete_json(buffer.content)
                 if fixed_json and buffer.tool_name:
                     args_obj = json.loads(fixed_json)
-                    final_tool_name, args_obj = fix_engine.apply_fixes(buffer.tool_name, args_obj, request_id)
+                    final_tool_name, args_obj = fix_engine.apply_fixes(
+                        buffer.tool_name, args_obj, request_id)
                     fixed_args_str = json.dumps(args_obj, ensure_ascii=False)
 
                     # Create a completion event for this tool call
@@ -722,18 +796,25 @@ async def process_remaining_buffers(request_id: str, response):
                         }]
                     }
 
-                    new_payload = json.dumps(completion_event, ensure_ascii=False)
+                    new_payload = json.dumps(
+                        completion_event, ensure_ascii=False)
                     try:
                         await response.write(f"data: {new_payload}\n\n".encode("utf-8"))
-                        console_logger.info(f"[{request_id}] 🔧 Completion: {final_tool_name}")
-                        logger.info(f"[{request_id}] Sent completion for incomplete buffer {call_id}")
+                        console_logger.info(
+                            f"[{request_id}] 🔧 Completion: {final_tool_name}")
+                        logger.info(
+                            f"[{request_id}] Sent completion for incomplete buffer {call_id}")
                     except Exception as write_error:
-                        logger.warning(f"[{request_id}] Failed to write completion: {write_error}")
+                        logger.warning(
+                            f"[{request_id}] Failed to write completion: {write_error}")
                 elif not buffer.tool_name:
-                    logger.warning(f"[{request_id}] Skipping completion for buffer {call_id} - could not infer tool name from: {buffer.content[:100]}...")
+                    logger.warning(
+                        f"[{request_id}] Skipping completion for buffer {call_id} - could not infer tool name from: {buffer.content[:100]}...")
 
             except Exception as e:
-                logger.warning(f"[{request_id}] Failed to process incomplete buffer {call_id}: {e}")
+                logger.warning(
+                    f"[{request_id}] Failed to process incomplete buffer {call_id}: {e}")
+
 
 async def try_fix_incomplete_json(json_str: str) -> str:
     """Try to fix incomplete JSON by adding missing closing braces/brackets"""
@@ -757,32 +838,39 @@ async def try_fix_incomplete_json(json_str: str) -> str:
     try:
         json.loads(result)
         return result
-    except:
+    except BaseException:
         return None
 
-async def try_json_recovery(malformed_json: str, tool: dict, tool_name: str, request_id: str) -> bool:
+
+async def try_json_recovery(
+        malformed_json: str, tool: dict, tool_name: str, request_id: str) -> bool:
     """Attempt to recover from malformed JSON"""
     recovery_attempts = [
         # Try to fix common JSON issues
-        lambda s: s.rstrip(',') + '}',  # Remove trailing comma and add closing brace
+        lambda s: s.rstrip(',') + '}',
+        # Remove trailing comma and add closing brace
         lambda s: s + '}',  # Just add closing brace
-        lambda s: '{' + s + '}' if not s.startswith('{') else s,  # Add opening brace
+        # Add opening brace
+        lambda s: '{' + s + '}' if not s.startswith('{') else s,
     ]
 
     for i, fix_func in enumerate(recovery_attempts):
         try:
             fixed_json = fix_func(malformed_json.strip())
             args_obj = json.loads(fixed_json)
-            final_tool_name, args_obj = fix_engine.apply_fixes(tool_name, args_obj, request_id)
+            final_tool_name, args_obj = fix_engine.apply_fixes(
+                tool_name, args_obj, request_id)
             fixed_args_str = json.dumps(args_obj, ensure_ascii=False)
             tool["function"]["name"] = final_tool_name
             tool["function"]["arguments"] = fixed_args_str
-            logger.info(f"[{request_id}] JSON recovery attempt {i+1} succeeded")
+            logger.info(
+                f"[{request_id}] JSON recovery attempt {i + 1} succeeded")
             return True
-        except:
+        except BaseException:
             continue
 
     return False
+
 
 def is_json_complete(json_str: str) -> bool:
     """Robust detection if JSON string is syntactically complete"""
@@ -826,8 +914,10 @@ def is_json_complete(json_str: str) -> bool:
             if (char == '}' and last != '{') or (char == ']' and last != '['):
                 return False
 
-    # JSON is complete if stack is empty (all brackets matched) and not in string
+    # JSON is complete if stack is empty (all brackets matched) and not in
+    # string
     return len(stack) == 0 and not in_string
+
 
 def validate_json_syntax(json_str: str) -> bool:
     """Quick validation that JSON is syntactically correct"""
@@ -836,6 +926,7 @@ def validate_json_syntax(json_str: str) -> bool:
         return True
     except json.JSONDecodeError:
         return False
+
 
 def infer_tool_name_from_content(content: str) -> str:
     """Infer tool name from JSON content by looking for known parameters"""
@@ -870,9 +961,11 @@ def infer_tool_name_from_content(content: str) -> str:
     elif '"notebook_path"' in content and '"new_source"' in content:
         return "notebookedit"
     elif '"path"' in content:
-        return "list"  # Default path-only parameter to list tool (directory listing)
+        # Default path-only parameter to list tool (directory listing)
+        return "list"
 
     return ""  # Unknown tool
+
 
 def detect_and_convert_xml_tool_call(content: str) -> dict:
     """
@@ -906,15 +999,19 @@ def detect_and_convert_xml_tool_call(content: str) -> dict:
         "arguments": args_obj
     }
 
-async def get_fixed_arguments(buffer: ToolBuffer, request_id: str) -> tuple[str, str]:
+
+async def get_fixed_arguments(
+        buffer: ToolBuffer, request_id: str) -> tuple[str, str]:
     """Get fixed arguments from buffer and return as (tool_name, JSON string)"""
     try:
         args_obj = json.loads(buffer.content)
-        final_tool_name, args_obj = fix_engine.apply_fixes(buffer.tool_name, args_obj, request_id)
+        final_tool_name, args_obj = fix_engine.apply_fixes(
+            buffer.tool_name, args_obj, request_id)
         return final_tool_name, json.dumps(args_obj, ensure_ascii=False)
     except Exception as e:
         logger.error(f"[{request_id}] Failed to get fixed arguments: {e}")
         return buffer.tool_name, ""
+
 
 async def health_check(request: web.Request):
     """Health check endpoint"""
@@ -923,47 +1020,48 @@ async def health_check(request: web.Request):
         'active_requests': len(request_states),
         'total_buffers': sum(len(state.tool_buffers) for state in request_states.values()),
         'config_loaded': bool(fix_engine.config),
-        'target_host': TARGET_HOST,
+        'target_host': request.app['target_url'],
         'uptime': 'unknown'  # Could track start time
     }
     return web.json_response(stats)
+
 
 async def reload_config(request: web.Request):
     """Reload configuration endpoint"""
     try:
         global fix_engine
         fix_engine = ToolFixEngine(CONFIG_FILE)
-        return web.json_response({'status': 'success', 'message': 'Configuration reloaded'})
+        return web.json_response(
+            {'status': 'success', 'message': 'Configuration reloaded'})
     except Exception as e:
         logger.error(f"Failed to reload config: {e}")
-        return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+        return web.json_response(
+            {'status': 'error', 'message': str(e)}, status=500)
+
 
 def main():
     """Main entry point for the proxy server"""
     parser = argparse.ArgumentParser(description="Qwen3 Call Patch Proxy")
     parser.add_argument(
         "--target-url",
-        default=TARGET_HOST,
-        help=f"Target URL to proxy requests to (default: {TARGET_HOST})",
+        default=DEFAULT_TARGET_URL,
+        help=f"Target URL to proxy requests to (default: {DEFAULT_TARGET_URL})",
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="Host address to listen on (default: 0.0.0.0)",
+        default=DEFAULT_LISTEN_HOST,
+        help=f"Host address to listen on (default: {DEFAULT_LISTEN_HOST})",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=LISTEN_PORT,
-        help=f"Port to listen on (default: {LISTEN_PORT})",
+        default=DEFAULT_LISTEN_PORT,
+        help=f"Port to listen on (default: {DEFAULT_LISTEN_PORT})",
     )
     args = parser.parse_args()
 
-    global TARGET_HOST, LISTEN_PORT
-    TARGET_HOST = args.target_url
-    LISTEN_PORT = args.port
-
     app = web.Application()
+    app['target_url'] = args.target_url
 
     # Add health and management endpoints
     app.router.add_get('/_health', health_check)
@@ -973,20 +1071,21 @@ def main():
     app.router.add_route("*", "/{tail:.*}", handle_request)
 
     console_logger.info(f"🔌 Qwen3 Call Patch Proxy starting...")
-    console_logger.info(f"   📡 Listening: {args.host}:{LISTEN_PORT}")
-    console_logger.info(f"   🎯 Target: {TARGET_HOST}")
+    console_logger.info(f"   📡 Listening: {args.host}:{args.port}")
+    console_logger.info(f"   🎯 Target: {args.target_url}")
     console_logger.info(f"   ⚙️  Config: {CONFIG_FILE}")
     console_logger.info(f"   📝 Log: {LOG_FILE}")
-    logger.info(f"   Health check: http://localhost:{LISTEN_PORT}/_health")
-    logger.info(f"   Reload config: POST http://localhost:{LISTEN_PORT}/_reload")
+    logger.info(f"   Health check: http://localhost:{args.port}/_health")
+    logger.info(f"   Reload config: POST http://localhost:{args.port}/_reload")
 
     try:
-        web.run_app(app, host=args.host, port=LISTEN_PORT)
+        web.run_app(app, host=args.host, port=args.port)
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")
     finally:
         # Cleanup any remaining state
         request_states.clear()
+
 
 if __name__ == "__main__":
     main()
