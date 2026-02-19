@@ -30,19 +30,19 @@ An HTTP proxy that fixes malformed tool calls from Qwen3-Coder LLM models before
 ### Via uv (recommended)
 
 ```bash
-uv tool install git+https://github.com/yourusername/qwen3-call-patch-proxy
+uv tool install git+https://github.com/eleqtrizit/qwen3-call-patch-proxy
 ```
 
 ### Via uvx (no install)
 
 ```bash
-uvx --from git+https://github.com/yourusername/qwen3-call-patch-proxy qwen3-call-patch-proxy
+uvx --from git+https://github.com/eleqtrizit/qwen3-call-patch-proxy qwen3-call-patch-proxy
 ```
 
 ### Via pip
 
 ```bash
-pip install git+https://github.com/yourusername/qwen3-call-patch-proxy
+pip install git+https://github.com/eleqtrizit/qwen3-call-patch-proxy
 ```
 
 ---
