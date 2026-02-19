@@ -100,6 +100,7 @@ class RequestState:
     tool_buffers: Dict[str, ToolBuffer] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     content_buffer: str = ""  # Buffer for accumulating XML content
+    sent_tool_signatures: List[str] = field(default_factory=list)  # For duplicate detection
 
     def cleanup_expired_buffers(self, timeout_seconds: int):
         expired_ids = [
@@ -419,6 +420,24 @@ async def handle_request(request: web.Request):
                             for i, tool_call in enumerate(tool_calls):
                                 logger.debug(
                                     f"[{request_id}] SSE Tool Call {i}: {json.dumps(tool_call, indent=2)}")
+                            # Duplicate detection: warn if same (name, args) pair is sent twice
+                            req_state = request_states.get(request_id)
+                            if req_state:
+                                for tc in tool_calls:
+                                    fn = tc.get("function", {})
+                                    sig = f"{fn.get('name')}|{fn.get('arguments', '')}"
+                                    if sig in req_state.sent_tool_signatures:
+                                        logger.warning(
+                                            f"[{request_id}] ⚠️  DUPLICATE tool call detected being sent to client: "
+                                            f"name={fn.get('name')!r} args={fn.get('arguments', '')!r}")
+                                        console_logger.info(
+                                            f"[{request_id}] ⚠️  DUPLICATE tool call sent: {fn.get('name')}")
+                                    else:
+                                        req_state.sent_tool_signatures.append(sig)
+                                        logger.info(
+                                            f"[{request_id}] → SENDING tool call to client: "
+                                            f"name={fn.get('name')!r} id={tc.get('id')!r} "
+                                            f"args={fn.get('arguments', '')!r}")
 
                         if verbose:
                             console_logger.info(
@@ -680,6 +699,67 @@ async def process_sse_event(event: dict, request_id: str) -> dict:
                     f"[{request_id}] 🔧 Tool call: {buffer.tool_name}")
                 await process_complete_buffer(buffer, tool, request_id)
                 del request_state.tool_buffers[call_id]
+            elif buffer.content:
+                # JSON is not syntactically complete yet.
+                # Do NOT attempt immediate recovery here: the model often sends
+                # the opening brace in the named-call header and the rest of
+                # the arguments as subsequent anonymous fragments.  Recovering
+                # from the partial prefix (e.g. just "{") produces a bogus call
+                # like {"path": "."} with the real pattern silently discarded.
+                #
+                # Instead, merge this partial content into the shared fragment
+                # buffer (main_tool_call) so anonymous fragments that arrive in
+                # later SSE events can complete it.  Stream-end handlers will
+                # process the merged buffer once it is complete.
+                if main_buffer_key not in request_state.tool_buffers:
+                    request_state.tool_buffers[main_buffer_key] = ToolBuffer(
+                        call_id=main_buffer_key,
+                        request_id=request_id,
+                        tool_name=""
+                    )
+                main_buf = request_state.tool_buffers[main_buffer_key]
+                # Decide whether to prepend or append.
+                # If main_buf already starts with a JSON opener it represents the
+                # beginning of the object (added by an earlier named-call event);
+                # the current named-call content is a later continuation → append.
+                # Otherwise the fragments in main_buf are a suffix without a
+                # leading '{' and the named-call content is the prefix → prepend.
+                if main_buf.content and main_buf.content.lstrip()[:1] in ('{', '['):
+                    main_buf.content = main_buf.content + buffer.content
+                else:
+                    main_buf.content = buffer.content + main_buf.content
+                if not main_buf.tool_name:
+                    main_buf.tool_name = buffer.tool_name or tool_name
+                logger.info(
+                    f"[{request_id}] Named call {call_id} ({buffer.tool_name or tool_name}) has incomplete JSON "
+                    f"({len(buffer.content)} chars) — merging into fragment buffer and deferring"
+                )
+                del request_state.tool_buffers[call_id]
+                tool["_suppress"] = True
+
+                # Re-check completeness: a fragment from the SAME SSE event
+                # may have already been accumulated before this named call was
+                # processed (fragment loop runs first).
+                if is_json_complete(main_buf.content):
+                    final_tool_name, fixed_args = await get_fixed_arguments(main_buf, request_id)
+                    if fixed_args and final_tool_name:
+                        fixed_call_id = f"call_{uuid.uuid4().hex[:24]}"
+                        if "tool_calls" not in delta:
+                            delta["tool_calls"] = []
+                        delta["tool_calls"].append({
+                            "index": 0,
+                            "id": fixed_call_id,
+                            "function": {
+                                "name": final_tool_name,
+                                "arguments": fixed_args
+                            }
+                        })
+                        console_logger.info(
+                            f"[{request_id}] 🔧 Tool call (merged+complete): {final_tool_name}")
+                        logger.info(
+                            f"[{request_id}] Emitting merged tool call {call_id} ({final_tool_name})"
+                        )
+                        del request_state.tool_buffers[main_buffer_key]
 
     # Check for finish_reason indicating all tool calls are done
     if finish_reason == "tool_calls":
@@ -728,6 +808,13 @@ async def process_complete_buffer(
         if await try_json_recovery(full_args_str, tool, tool_name, request_id):
             logger.info(
                 f"[{request_id}] Successfully recovered malformed JSON for {call_id}")
+            try:
+                json.loads(tool["function"]["arguments"])
+                logger.info(
+                    f"[{request_id}] Recovered tool call arguments are valid JSON for {call_id}")
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"[{request_id}] Recovered tool call arguments are NOT valid JSON for {call_id}: {e}")
         else:
             # Keep original if recovery fails
             logger.warning(
@@ -738,31 +825,48 @@ async def process_complete_buffer(
 
 
 async def process_all_buffers(request_state: RequestState, request_id: str):
-    """Process all remaining buffers when tool_calls finish_reason is received"""
+    """Process all remaining buffers when tool_calls finish_reason is received.
+
+    Fixes/recovers JSON in each buffer but does NOT emit SSE events – that is
+    deferred to process_remaining_buffers (called at [DONE]).  Buffers with
+    successfully fixed content are kept so process_remaining_buffers can emit
+    them; only buffers that remain unfixable are dropped.
+    """
     if not request_state.tool_buffers:
         return
 
     logger.info(
         f"[{request_id}] Processing {len(request_state.tool_buffers)} remaining buffers")
 
+    to_drop: list[str] = []
     for call_id, buffer in list(request_state.tool_buffers.items()):
-        if buffer.content:
-            # Create a dummy tool structure for processing
-            dummy_tool = {
-                "id": call_id,
-                "function": {
-                    "name": buffer.tool_name,
-                    "arguments": buffer.content
-                }
-            }
-            await process_complete_buffer(buffer, dummy_tool, request_id)
-            # Log the final processed arguments
-            final_args = dummy_tool["function"]["arguments"]
-            logger.info(
-                f"[{request_id}] Final processed args for {call_id}: {final_args}")
+        if not buffer.content:
+            to_drop.append(call_id)
+            continue
 
-    # Clear all buffers after processing
-    request_state.tool_buffers.clear()
+        dummy_tool: dict = {
+            "id": call_id,
+            "function": {
+                "name": buffer.tool_name,
+                "arguments": buffer.content
+            }
+        }
+        await process_complete_buffer(buffer, dummy_tool, request_id)
+        final_args = dummy_tool["function"]["arguments"]
+        logger.info(
+            f"[{request_id}] Fixed args for {call_id} ({buffer.tool_name!r}): {final_args!r}")
+
+        # Store the fixed JSON back so process_remaining_buffers can emit it.
+        if final_args and validate_json_syntax(final_args):
+            buffer.content = final_args
+            buffer.tool_name = dummy_tool["function"]["name"]
+        else:
+            logger.warning(
+                f"[{request_id}] Buffer {call_id} could not be fixed, dropping")
+            to_drop.append(call_id)
+
+    for call_id in to_drop:
+        request_state.tool_buffers.pop(call_id, None)
 
 
 async def process_remaining_buffers(request_id: str, response):
@@ -780,8 +884,21 @@ async def process_remaining_buffers(request_id: str, response):
     for call_id, buffer in list(request_state.tool_buffers.items()):
         if buffer.content:
             try:
-                # Try to fix incomplete JSON
+                logger.debug(
+                    f"[{request_id}] process_remaining_buffers: {call_id} ({buffer.tool_name!r}) "
+                    f"content={buffer.content!r}"
+                )
+                # Try to fix incomplete JSON; fall back to recovery heuristics.
                 fixed_json = await try_fix_incomplete_json(buffer.content)
+                if not fixed_json:
+                    # try_fix_incomplete_json only handles missing brackets.
+                    # Use the recovery heuristics as a second pass.
+                    dummy_tool: dict = {"function": {"name": buffer.tool_name, "arguments": ""}}
+                    if await try_json_recovery(buffer.content, dummy_tool, buffer.tool_name, request_id):
+                        fixed_json = dummy_tool["function"]["arguments"]
+                        # Update tool_name in case it was converted
+                        buffer.tool_name = dummy_tool["function"]["name"]
+
                 if fixed_json and buffer.tool_name:
                     args_obj = json.loads(fixed_json)
                     final_tool_name, args_obj = fix_engine.apply_fixes(
@@ -811,7 +928,7 @@ async def process_remaining_buffers(request_id: str, response):
                     try:
                         await response.write(f"data: {new_payload}\n\n".encode("utf-8"))
                         console_logger.info(
-                            f"[{request_id}] 🔧 Completion: {final_tool_name}")
+                            f"[{request_id}] 🔧 Completion: {final_tool_name} args={fixed_args_str!r}")
                         logger.info(
                             f"[{request_id}] Sent completion for incomplete buffer {call_id}")
                     except Exception as write_error:
@@ -819,7 +936,12 @@ async def process_remaining_buffers(request_id: str, response):
                             f"[{request_id}] Failed to write completion: {write_error}")
                 elif not buffer.tool_name:
                     logger.warning(
-                        f"[{request_id}] Skipping completion for buffer {call_id} - could not infer tool name from: {buffer.content[:100]}...")
+                        f"[{request_id}] Skipping completion for buffer {call_id} - "
+                        f"could not infer tool name from: {buffer.content[:200]!r}")
+                else:
+                    logger.warning(
+                        f"[{request_id}] Skipping completion for buffer {call_id} ({buffer.tool_name!r}) - "
+                        f"could not fix JSON: {buffer.content[:200]!r}")
 
             except Exception as e:
                 logger.warning(
@@ -864,6 +986,10 @@ async def try_json_recovery(
         lambda s: '{' + s + '}' if not s.startswith('{') else s,
     ]
 
+    logger.debug(
+        f"[{request_id}] try_json_recovery called for tool '{tool_name}' "
+        f"(len={len(malformed_json)}) input: {malformed_json!r}")
+
     for i, fix_func in enumerate(recovery_attempts):
         try:
             fixed_json = fix_func(malformed_json.strip())
@@ -874,11 +1000,17 @@ async def try_json_recovery(
             tool["function"]["name"] = final_tool_name
             tool["function"]["arguments"] = fixed_args_str
             logger.info(
-                f"[{request_id}] JSON recovery attempt {i + 1} succeeded")
+                f"[{request_id}] JSON recovery attempt {i + 1} succeeded for tool '{tool_name}' → '{final_tool_name}'"
+            )
+            logger.debug(
+                f"[{request_id}] Recovery output: {fixed_args_str!r}")
             return True
         except BaseException:
             continue
 
+    logger.warning(
+        f"[{request_id}] All JSON recovery attempts failed for tool '{tool_name}'. "
+        f"Input was: {malformed_json!r}")
     return False
 
 
