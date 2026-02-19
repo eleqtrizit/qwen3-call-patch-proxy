@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import ToolFixEngine, is_json_complete, validate_json_syntax
+from qwen3_call_patch_proxy import ToolFixEngine, is_json_complete, validate_json_syntax, CONFIG_FILE
 
 def test_json_completion():
     """Test JSON completion detection"""
@@ -80,7 +80,7 @@ def test_yaml_config():
     print("Testing YAML configuration:")
     
     try:
-        engine = ToolFixEngine("tool_fixes.yaml")
+        engine = ToolFixEngine(CONFIG_FILE)
         if engine.config and 'tools' in engine.config:
             print("  ✓ YAML configuration loaded successfully")
             print(f"  ✓ Found {len(engine.config['tools'])} configured tools")

@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import process_sse_event, RequestState, request_states, infer_tool_name_from_content
+from qwen3_call_patch_proxy import process_sse_event, RequestState, request_states, infer_tool_name_from_content
 import asyncio
 import json
 import uuid

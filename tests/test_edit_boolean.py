@@ -6,14 +6,14 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import ToolFixEngine
+from qwen3_call_patch_proxy import ToolFixEngine, CONFIG_FILE
 
 def test_edit_boolean_conversion():
     """Test Edit tool boolean conversion"""
     print("Testing Edit tool boolean conversion:")
     
     # Create fix engine
-    engine = ToolFixEngine("tool_fixes.yaml")
+    engine = ToolFixEngine(CONFIG_FILE)
     
     # Test cases for replaceAll conversion
     test_cases = [

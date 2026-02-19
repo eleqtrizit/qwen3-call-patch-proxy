@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import infer_tool_name_from_content, ToolBuffer
+from qwen3_call_patch_proxy import infer_tool_name_from_content, ToolBuffer
 import asyncio
 import json
 from datetime import datetime

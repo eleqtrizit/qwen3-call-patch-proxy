@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import detect_and_convert_xml_tool_call
+from qwen3_call_patch_proxy import detect_and_convert_xml_tool_call
 import asyncio
 import json
 

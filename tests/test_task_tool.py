@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import infer_tool_name_from_content, ToolFixEngine
+from qwen3_call_patch_proxy import infer_tool_name_from_content, ToolFixEngine, CONFIG_FILE
 
 def test_task_tool_inference():
     """Test Task tool inference"""
@@ -34,7 +34,7 @@ def test_task_tool_fixes():
     print("\nTesting Task tool fixes:")
     
     # Create fix engine
-    engine = ToolFixEngine("tool_fixes.yaml")
+    engine = ToolFixEngine(CONFIG_FILE)
     
     # Test case: missing subagent_type
     args_input = {

@@ -7,11 +7,11 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from call_patch_proxy import ToolFixEngine
+from qwen3_call_patch_proxy import ToolFixEngine, CONFIG_FILE
 
 def test_malformed_json_fixes():
     """Test that the proxy can fix common JSON issues from LLMs"""
-    engine = ToolFixEngine("tool_fixes.yaml")
+    engine = ToolFixEngine(CONFIG_FILE)
     
     # Test cases for malformed JSON that LLMs commonly generate
     test_cases = [
@@ -61,7 +61,7 @@ def test_malformed_json_fixes():
 
 def test_tool_conversion():
     """Test read->write tool conversion"""
-    engine = ToolFixEngine("tool_fixes.yaml")
+    engine = ToolFixEngine(CONFIG_FILE)
     
     print("\n🧪 Testing tool conversion (read→write)...")
     

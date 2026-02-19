@@ -1,72 +1,72 @@
 # Qwen3 Call Patch Proxy
 
-A robust HTTP proxy server that fixes malformed tool calls from Qwen3-Coder LLM models before sending them to OpenCode or other downstream services.
+An HTTP proxy that fixes malformed tool calls from Qwen3-Coder LLM models before forwarding them to OpenCode or any OpenAI-compatible client.
 
-> **Note:** This proxy is primarily developed for [OpenCode](https://github.com/sst/opencode), but may be useful for other LLM environments requiring tool call format fixes.
+> Primarily developed for [OpenCode](https://github.com/sst/opencode), but works with any client using the OpenAI streaming API.
 
-## What It Does
+## What It Fixes
 
-Fixes Qwen3-Coder tool call issues:
-- Consolidates fragmented tool calls across multiple SSE events
-- Converts string parameters to proper types (arrays, booleans)
-- Adds missing required parameters with sensible defaults
-- Generates proper tool call IDs in OpenCode format
+- **Fragmented tool calls** — consolidates arguments split across multiple SSE events
+- **Wrong parameter types** — converts string-encoded arrays, objects, and booleans to their proper types
+- **Missing parameters** — injects sensible defaults for required fields the model omits
+- **Invalid tool call IDs** — rewrites IDs to the `call_<hex>` format OpenCode expects
+- **XML-format tool calls** — converts `<function=...>` syntax to JSON tool call format
+
+## Tested Models
+
+- `unsloth/Qwen3-Coder-30B-A3B-Instruct`
+- `cpatonn/Qwen3-Coder-30B-A3B-Instruct-AWQ`
 
 ## Demo
 
 <img src="images/OpenCode-Qwen3-Coder-GameOfLife.png" alt="OpenCode creating Game of Life with Qwen3-Coder" width="600">
 
-*OpenCode successfully creating Conway's Game of Life using Qwen3-Coder through the proxy*
+*OpenCode successfully completing a Conway's Game of Life implementation via the proxy*
 
-## Tested Models
+---
 
-- **unsloth/Qwen3-Coder-30B-A3B-Instruct**
-- **cpatonn/Qwen3-Coder-30B-A3B-Instruct-AWQ**
+## Installation
 
-## Quick Start
+### Via uv (recommended)
 
-### Prerequisites
-- Python 3.8+
-- A running Qwen3-Coder model server (typically on port 8080)
-- OpenCode or compatible client
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/qwen3-call-patch-proxy.git
-   cd qwen3-call-patch-proxy
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Start the proxy:**
-   ```bash
-   python call_patch_proxy.py
-   ```
-
-4. **Configure OpenCode to use the proxy:**
-   Point OpenCode to `http://localhost:7999` instead of your model server directly.
-
-### Architecture
-
-```
-OpenCode ──→ Proxy (7999) ──→ Qwen3 Server (8080)
-             [Fixes tool calls]
+```bash
+uv tool install git+https://github.com/yourusername/qwen3-call-patch-proxy
 ```
 
-## OpenCode Configuration
+### Via uvx (no install)
 
-To use this proxy with OpenCode, add the following provider configuration to your OpenCode settings:
+```bash
+uvx --from git+https://github.com/yourusername/qwen3-call-patch-proxy qwen3-call-patch-proxy
+```
+
+### Via pip
+
+```bash
+pip install git+https://github.com/yourusername/qwen3-call-patch-proxy
+```
+
+---
+
+## Usage
+
+```
+OpenCode ──→ Proxy :7999 ──→ Qwen3 Server :8080
+              [fixes SSE stream]
+```
+
+Start the proxy (defaults: listen on `7999`, forward to `http://127.0.0.1:8080`):
+
+```bash
+qwen3-call-patch-proxy
+```
+
+Then configure OpenCode to use `http://127.0.0.1:7999/v1` as the base URL:
 
 ```json
 {
   "provider": {
-    "qwen3-coder-30b-a3b-instruct-vllm": {
-      "name": "Qwen 3 Coder 30B (vLLM)",
+    "qwen3-coder": {
+      "name": "Qwen3 Coder (via proxy)",
       "npm": "@ai-sdk/openai-compatible",
       "models": {
         "cpatonn/Qwen3-Coder-30B-A3B-Instruct-AWQ": {}
@@ -79,40 +79,27 @@ To use this proxy with OpenCode, add the following provider configuration to you
 }
 ```
 
-This configuration:
-- Uses the proxy on port 7999 as the `baseURL`
-- Works with OpenAI-compatible API format
-- Supports AWQ quantized models for efficient inference
+---
 
-## Health Monitoring
+## Management Endpoints
 
-- **Health check:** `GET http://localhost:7999/_health`
-- **Reload config:** `POST http://localhost:7999/_reload`
-
-## Documentation
-
-For detailed information, see:
-- [Detailed Guide](docs/detailed-guide.md) - Complete documentation with examples and configuration options
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and add tests
-4. Commit: `git commit -m 'Add amazing feature'`
-5. Push: `git push origin feature/amazing-feature`
-6. Open a Pull Request
-
-## License
-
-This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built for the OpenCode ecosystem
-- Designed to work with Qwen3-Coder models from Alibaba Cloud
-- Inspired by the need for robust LLM tool call handling
+| Endpoint | Method | Description |
+|---|---|---|
+| `/_health` | GET | Returns proxy status and buffer counts |
+| `/_reload` | POST | Reloads `tool_fixes.yaml` without restart |
 
 ---
 
-**Need help?** Open an issue or check the [discussions](../../discussions) section!
+## Logging
+
+Detailed logs are written to `{system_temp}/proxy_detailed.log` (e.g. `/tmp/proxy_detailed.log`).
+
+---
+
+## Documentation
+
+See [DETAILED_GUIDE.md](DETAILED_GUIDE.md) for configuration reference, fix rules, architecture details, and troubleshooting.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

@@ -8,7 +8,7 @@ import json
 import asyncio
 sys.path.insert(0, os.path.dirname(__file__))
 
-from call_patch_proxy import (
+from qwen3_call_patch_proxy import (
     RequestState, 
     process_sse_event,
     infer_tool_name_from_content
@@ -38,7 +38,7 @@ async def test_task_detection():
     request_state = RequestState(request_id=request_id)
     
     # Mock request_states
-    from call_patch_proxy import request_states
+    from qwen3_call_patch_proxy import request_states
     request_states[request_id] = request_state
     
     try:
