@@ -17,6 +17,7 @@ License: MIT
 Repository: https://github.com/yourusername/qwen3-call-patch-proxy
 """
 
+import argparse
 import aiohttp
 from aiohttp import web
 import json
@@ -939,6 +940,29 @@ async def reload_config(request: web.Request):
 
 def main():
     """Main entry point for the proxy server"""
+    parser = argparse.ArgumentParser(description="Qwen3 Call Patch Proxy")
+    parser.add_argument(
+        "--target-url",
+        default=TARGET_HOST,
+        help=f"Target URL to proxy requests to (default: {TARGET_HOST})",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host address to listen on (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=LISTEN_PORT,
+        help=f"Port to listen on (default: {LISTEN_PORT})",
+    )
+    args = parser.parse_args()
+
+    global TARGET_HOST, LISTEN_PORT
+    TARGET_HOST = args.target_url
+    LISTEN_PORT = args.port
+
     app = web.Application()
 
     # Add health and management endpoints
@@ -949,7 +973,7 @@ def main():
     app.router.add_route("*", "/{tail:.*}", handle_request)
 
     console_logger.info(f"🔌 Qwen3 Call Patch Proxy starting...")
-    console_logger.info(f"   📡 Listening: 0.0.0.0:{LISTEN_PORT}")
+    console_logger.info(f"   📡 Listening: {args.host}:{LISTEN_PORT}")
     console_logger.info(f"   🎯 Target: {TARGET_HOST}")
     console_logger.info(f"   ⚙️  Config: {CONFIG_FILE}")
     console_logger.info(f"   📝 Log: {LOG_FILE}")
@@ -957,7 +981,7 @@ def main():
     logger.info(f"   Reload config: POST http://localhost:{LISTEN_PORT}/_reload")
 
     try:
-        web.run_app(app, host="0.0.0.0", port=LISTEN_PORT)
+        web.run_app(app, host=args.host, port=LISTEN_PORT)
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")
     finally:
