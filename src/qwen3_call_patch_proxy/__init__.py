@@ -977,7 +977,14 @@ async def try_fix_incomplete_json(json_str: str) -> str:
 async def try_json_recovery(
         malformed_json: str, tool: dict, tool_name: str, request_id: str) -> bool:
     """Attempt to recover from malformed JSON"""
+    def _strip_malformed_trailing_duplicate_key(s: str) -> str:
+        # Handles: ,"key"/value or ,"key"value where the colon is missing
+        # e.g. ..."filePath":"good","filePath"/bad"} -> ..."filePath":"good"}
+        return re.sub(r',\s*"[^"]+"\s*(?!:)[^}]*\}$', '}', s)
+
     recovery_attempts = [
+        # Strip malformed duplicate key at the end (missing colon after key name)
+        _strip_malformed_trailing_duplicate_key,
         # Try to fix common JSON issues
         lambda s: s.rstrip(',') + '}',
         # Remove trailing comma and add closing brace
