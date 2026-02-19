@@ -27,16 +27,16 @@ An HTTP proxy that fixes malformed tool calls from Qwen3-Coder LLM models before
 
 ## Installation
 
+### Via uvx (no install)
+
+```bash
+uvx git+https://github.com/eleqtrizit/qwen3-call-patch-proxy
+```
+
 ### Via uv (recommended)
 
 ```bash
 uv tool install git+https://github.com/eleqtrizit/qwen3-call-patch-proxy
-```
-
-### Via uvx (no install)
-
-```bash
-uvx --from git+https://github.com/eleqtrizit/qwen3-call-patch-proxy qwen3-call-patch-proxy
 ```
 
 ### Via pip
@@ -54,10 +54,23 @@ OpenCode ──→ Proxy :7999 ──→ Qwen3 Server :8080
               [fixes SSE stream]
 ```
 
-Start the proxy (defaults: listen on `7999`, forward to `http://127.0.0.1:8080`):
+Start the proxy (defaults: listen on `0.0.0.0:7999`, forward to `http://127.0.0.1:8080`):
 
 ```bash
-qwen3-call-patch-proxy
+qwen3-call-patch-proxy [--host HOST] [--port PORT] [--target-url URL] [--verbose]
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--host` | `0.0.0.0` | Host address to listen on |
+| `--port` | `7999` | Port to listen on |
+| `--target-url` | `http://127.0.0.1:8080` | Target URL to proxy requests to |
+| `--verbose` | `false` | Log each SSE stream response returned to the client |
+
+Example with custom target:
+
+```bash
+qwen3-call-patch-proxy --port 7999 --target-url http://127.0.0.1:8080
 ```
 
 Then configure OpenCode to use `http://127.0.0.1:7999/v1` as the base URL:
@@ -100,6 +113,3 @@ Detailed logs are written to `{system_temp}/proxy_detailed.log` (e.g. `/tmp/prox
 
 See [DETAILED_GUIDE.md](DETAILED_GUIDE.md) for configuration reference, fix rules, architecture details, and troubleshooting.
 
-## License
-
-MIT — see [LICENSE](LICENSE).

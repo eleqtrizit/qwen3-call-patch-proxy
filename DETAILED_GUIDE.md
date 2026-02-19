@@ -2,33 +2,15 @@
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Installation](#installation)
-4. [Configuration](#configuration)
-5. [Fix Rules Reference](#fix-rules-reference)
-6. [Tool Name Inference](#tool-name-inference)
-7. [XML Tool Call Conversion](#xml-tool-call-conversion)
-8. [Management API](#management-api)
-9. [Logging](#logging)
-10. [Troubleshooting](#troubleshooting)
-11. [Extending with Custom Fix Rules](#extending-with-custom-fix-rules)
-
----
-
-## Overview
-
-Qwen3-Coder models produce OpenAI-compatible streaming responses but frequently generate malformed tool calls. Common failure modes include:
-
-- Arguments serialized as a JSON string instead of an object
-- Required parameters missing entirely
-- Boolean fields passed as string literals (`"True"`, `"False"`)
-- Array fields passed as a JSON-encoded string (`"[{...}]"`)
-- Tool call arguments fragmented across many SSE `data:` events
-- Tool calls emitted as XML (`<function=bash><parameter=command>ls</parameter></function>`) instead of JSON
-- Invalid `id` formats rejected by OpenCode
-
-This proxy sits between your client and the model server, intercepts the SSE stream, buffers and reassembles fragmented tool calls, applies configurable fix rules, then forwards corrected events downstream.
+1. [Architecture](#architecture)
+2. [Configuration](#configuration)
+3. [Fix Rules Reference](#fix-rules-reference)
+4. [Tool Name Inference](#tool-name-inference)
+5. [XML Tool Call Conversion](#xml-tool-call-conversion)
+6. [Management API](#management-api)
+7. [Logging](#logging)
+8. [Troubleshooting](#troubleshooting)
+9. [Extending with Custom Fix Rules](#extending-with-custom-fix-rules)
 
 ---
 
@@ -65,55 +47,14 @@ This proxy sits between your client and the model server, intercepts the SSE str
 
 ---
 
-## Installation
-
-### Requirements
-
-- Python 3.9+
-- A running OpenAI-compatible model server (e.g. vLLM, llama.cpp, Ollama)
-
-### uv tool (recommended — installs globally, available as a command)
-
-```bash
-uv tool install git+https://github.com/yourusername/qwen3-call-patch-proxy
-qwen3-call-patch-proxy
-```
-
-### uvx (ephemeral — no installation required)
-
-```bash
-uvx --from git+https://github.com/yourusername/qwen3-call-patch-proxy qwen3-call-patch-proxy
-```
-
-### pip
-
-```bash
-pip install git+https://github.com/yourusername/qwen3-call-patch-proxy
-qwen3-call-patch-proxy
-```
-
-### Development / editable install
-
-```bash
-git clone https://github.com/yourusername/qwen3-call-patch-proxy
-cd qwen3-call-patch-proxy
-uv sync
-uv run qwen3-call-patch-proxy
-```
-
----
-
 ## Configuration
 
-### Runtime constants
+### CLI arguments
 
-The following constants are defined at the top of `src/qwen3_call_patch_proxy/__init__.py` and can be changed before running:
+See `qwen3-call-patch-proxy --help` or the README for the full argument reference. The relevant runtime paths are:
 
 | Constant | Default | Description |
 |---|---|---|
-| `TARGET_HOST` | `http://127.0.0.1:8080` | Upstream model server |
-| `LISTEN_PORT` | `7999` | Port the proxy listens on |
-| `LOG_LEVEL` | `logging.DEBUG` | Log verbosity |
 | `CONFIG_FILE` | bundled `tool_fixes.yaml` | Fix rules file |
 | `LOG_FILE` | `{tempdir}/proxy_detailed.log` | Detailed log path |
 
