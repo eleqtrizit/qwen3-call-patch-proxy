@@ -16,6 +16,7 @@ An HTTP proxy that fixes malformed tool calls from Qwen3-Coder LLM models before
 
 - `unsloth/Qwen3-Coder-30B-A3B-Instruct`
 - `cpatonn/Qwen3-Coder-30B-A3B-Instruct-AWQ`
+- `Qwen/Qwen3-Coder-Next-GGUF:Q8_0`
 
 ## Demo
 
