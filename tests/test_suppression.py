@@ -46,11 +46,9 @@ async def test_empty_named_call_suppression():
         
         # Check if tool_calls was removed or empty
         delta1 = fixed_event1["choices"][0]["delta"]
-        if "tool_calls" not in delta1 or len(delta1["tool_calls"]) == 0:
-            print("  ✓ Empty named tool call suppressed")
-        else:
-            print("  ✗ Empty named tool call not suppressed")
-            return False
+        assert "tool_calls" not in delta1 or len(delta1["tool_calls"]) == 0, \
+            f"Empty named tool call not suppressed: {delta1.get('tool_calls')}"
+        print("  ✓ Empty named tool call suppressed")
         
         # Test 2: Mixed event with empty named call AND fragments
         event2 = {
@@ -77,20 +75,13 @@ async def test_empty_named_call_suppression():
         
         # Check the result
         delta2 = fixed_event2["choices"][0]["delta"]
-        if "tool_calls" in delta2 and len(delta2["tool_calls"]) == 1:
-            tool_call = delta2["tool_calls"][0] 
-            if "index" in tool_call and tool_call.get("function", {}).get("name") == "todowrite":
-                print("  ✓ Empty named call suppressed, fragments consolidated")
-            else:
-                print("  ✗ Result not as expected")
-                print(f"    Tool call: {tool_call}")
-                return False
-        else:
-            print("  ✗ Expected 1 tool call after processing")
-            print(f"    Got: {delta2.get('tool_calls', [])}")
-            return False
-            
-        return True
+        assert "tool_calls" in delta2 and len(delta2["tool_calls"]) == 1, \
+            f"Expected 1 tool call after processing, got: {delta2.get('tool_calls', [])}"
+        
+        tool_call = delta2["tool_calls"][0] 
+        assert "index" in tool_call and tool_call.get("function", {}).get("name") == "todowrite", \
+            f"Result not as expected: {tool_call}"
+        print("  ✓ Empty named call suppressed, fragments consolidated")
         
     finally:
         # Cleanup
@@ -100,14 +91,10 @@ async def test_empty_named_call_suppression():
 async def main():
     print("Testing tool call suppression logic...\n")
     
-    success = await test_empty_named_call_suppression()
+    await test_empty_named_call_suppression()
     
-    if success:
-        print("\n🎉 Tool call suppression test passed!")
-        return 0
-    else:
-        print("\n❌ Tool call suppression test failed!")
-        return 1
+    print("\n🎉 Tool call suppression test passed!")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

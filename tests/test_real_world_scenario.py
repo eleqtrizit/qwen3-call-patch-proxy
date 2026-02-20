@@ -89,9 +89,7 @@ async def test_end_to_end_glob_call():
         else:
             print(f"  → Fragments suppressed (expected)")
     
-    if not tool_call_event:
-        print("✗ No complete tool call generated")
-        return False
+    assert tool_call_event is not None, "No complete tool call generated"
     
     # Verify the tool call is properly formatted for OpenCode
     tool_call = tool_call_event["choices"][0]["delta"]["tool_calls"][0]
@@ -103,49 +101,34 @@ async def test_end_to_end_glob_call():
     print(f"  Arguments: {tool_call['function']['arguments']}")
     
     # Parse and verify arguments
-    try:
-        args = json.loads(tool_call['function']['arguments'])
-        print(f"  Parsed args: {args}")
-        
-        # Check that the fix engine added the default path
-        has_pattern = "pattern" in args
-        has_path = "path" in args  # Should be added by fix engine
-        pattern_correct = args.get("pattern") == "src/**/*.py"
-        
-        print(f"  Has pattern: {has_pattern}")
-        print(f"  Has default path: {has_path}")
-        print(f"  Pattern correct: {pattern_correct}")
-        
-        success = (
-            tool_call['function']['name'] == 'glob' and
-            tool_call['id'].startswith('call_') and
-            'index' in tool_call and
-            has_pattern and
-            has_path and
-            pattern_correct
-        )
-        
-        if success:
-            print("\n✓ Tool call properly formatted for OpenCode!")
-        else:
-            print("\n✗ Tool call format issues detected")
-        
-        # Cleanup
-        if request_id in request_states:
-            del request_states[request_id]
-        
-        return success
-        
-    except json.JSONDecodeError as e:
-        print(f"✗ Failed to parse arguments: {e}")
-        return False
+    args = json.loads(tool_call['function']['arguments'])
+    print(f"  Parsed args: {args}")
+    
+    # Check that the fix engine added the default path
+    has_pattern = "pattern" in args
+    has_path = "path" in args  # Should be added by fix engine
+    pattern_correct = args.get("pattern") == "src/**/*.py"
+    
+    print(f"  Has pattern: {has_pattern}")
+    print(f"  Has default path: {has_path}")
+    print(f"  Pattern correct: {pattern_correct}")
+    
+    assert tool_call['function']['name'] == 'glob', \
+        f"Expected function name 'glob', got '{tool_call['function']['name']}'"
+    assert tool_call['id'].startswith('call_'), \
+        f"Call ID doesn't start with 'call_': {tool_call['id']}"
+    assert 'index' in tool_call, "Tool call missing 'index' field"
+    assert has_pattern, f"Arguments missing 'pattern': {args}"
+    assert has_path, f"Arguments missing default 'path': {args}"
+    assert pattern_correct, f"Expected pattern 'src/**/*.py', got '{args.get('pattern')}'"
+    
+    print("\n✓ Tool call properly formatted for OpenCode!")
+    
+    # Cleanup
+    if request_id in request_states:
+        del request_states[request_id]
 
 if __name__ == "__main__":
-    success = asyncio.run(test_end_to_end_glob_call())
-    
-    if success:
-        print("\n🎉 End-to-end glob call test passed!")
-        sys.exit(0)
-    else:
-        print("\n❌ End-to-end glob call test failed!")
-        sys.exit(1)
+    asyncio.run(test_end_to_end_glob_call())
+    print("\n🎉 End-to-end glob call test passed!")
+    sys.exit(0)

@@ -51,8 +51,6 @@ def test_xml_tool_call_detection():
     ]
     
     print("Testing XML tool call detection and conversion:")
-    passed = 0
-    total = len(test_cases)
     
     for i, test_case in enumerate(test_cases, 1):
         xml_content = test_case["xml"]
@@ -62,23 +60,17 @@ def test_xml_tool_call_detection():
         result = detect_and_convert_xml_tool_call(xml_content)
         
         if expected_function is None:
-            # Expecting None result
-            if result is None:
-                print(f"  {i}. ✓ Correctly detected invalid XML")
-                passed += 1
-            else:
-                print(f"  {i}. ✗ Expected None but got: {result}")
+            assert result is None, f"Case {i}: Expected None but got: {result}"
+            print(f"  {i}. ✓ Correctly detected invalid XML")
         else:
-            # Expecting valid conversion
-            if result and result["function_name"] == expected_function and result["arguments"] == expected_args:
-                print(f"  {i}. ✓ {expected_function} -> {result['arguments']}")
-                passed += 1
-            else:
-                print(f"  {i}. ✗ Expected {expected_function} with {expected_args}")
-                print(f"       Got: {result}")
+            assert result is not None, f"Case {i}: Expected result but got None"
+            assert result["function_name"] == expected_function, \
+                f"Case {i}: Expected function '{expected_function}', got '{result['function_name']}'"
+            assert result["arguments"] == expected_args, \
+                f"Case {i}: Expected args {expected_args}, got {result['arguments']}"
+            print(f"  {i}. ✓ {expected_function} -> {result['arguments']}")
     
-    print(f"\nXML tool call tests: {passed}/{total} passed")
-    return passed == total
+    print(f"\nXML tool call tests: {len(test_cases)}/{len(test_cases)} passed")
 
 def test_xml_content_scenarios():
     """Test various XML content scenarios"""
@@ -105,20 +97,12 @@ find . -name "*.py" | head -5
     
     for i, content in enumerate(scenarios, 1):
         result = detect_and_convert_xml_tool_call(content)
-        if result:
-            print(f"  {i}. ✓ Detected: {result['function_name']} with {len(result['arguments'])} params")
-        else:
-            print(f"  {i}. ✗ Failed to detect tool call in content")
-    
-    return True
+        assert result is not None, f"Scenario {i}: Failed to detect tool call in content"
+        print(f"  {i}. ✓ Detected: {result['function_name']} with {len(result['arguments'])} params")
 
 if __name__ == "__main__":
-    success1 = test_xml_tool_call_detection()
-    success2 = test_xml_content_scenarios()
+    test_xml_tool_call_detection()
+    test_xml_content_scenarios()
     
-    if success1 and success2:
-        print("\n🎉 All XML tool call conversion tests passed!")
-        sys.exit(0)
-    else:
-        print("\n❌ Some XML tool call conversion tests failed!")
-        sys.exit(1)
+    print("\n🎉 All XML tool call conversion tests passed!")
+    sys.exit(0)

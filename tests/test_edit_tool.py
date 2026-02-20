@@ -23,16 +23,13 @@ def test_edit_tool_inference():
     ]
     
     print("Testing tool name inference for Edit and related tools:")
-    passed = 0
     for content, expected in test_cases:
         result = infer_tool_name_from_content(content)
         status = "✓" if result == expected else "✗"
         print(f"  {status} {content[:50]}... -> {result} (expected {expected})")
-        if result == expected:
-            passed += 1
+        assert result == expected, f"Expected '{expected}', got '{result}' for: {content[:60]}"
     
-    print(f"Edit tool inference tests: {passed}/{len(test_cases)} passed")
-    return passed == len(test_cases)
+    print(f"Edit tool inference tests: {len(test_cases)}/{len(test_cases)} passed")
 
 if __name__ == "__main__":
     success = test_edit_tool_inference()

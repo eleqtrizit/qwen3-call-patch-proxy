@@ -36,21 +36,15 @@ def test_filepath_inference():
     ]
     
     print("Testing file path inference:")
-    passed = 0
     total = len(test_cases)
     
     for i, (content, expected) in enumerate(test_cases, 1):
         result = infer_tool_name_from_content(content)
         status = "✓" if result == expected else "✗"
         print(f"  {i:2d}. {status} {expected:5s} -> {result:5s} | {content[:50]}...")
-        
-        if result == expected:
-            passed += 1
-        else:
-            print(f"       Expected '{expected}', got '{result}'")
+        assert result == expected, f"Expected '{expected}', got '{result}' for: {content[:60]}"
     
-    print(f"\nFile path inference tests: {passed}/{total} passed")
-    return passed == total
+    print(f"\nFile path inference tests: {total}/{total} passed")
 
 if __name__ == "__main__":
     success = test_filepath_inference()

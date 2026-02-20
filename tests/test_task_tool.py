@@ -18,16 +18,12 @@ def test_task_tool_inference():
     ]
     
     print("Testing Task tool name inference:")
-    passed = 0
     for content, expected in test_cases:
         result = infer_tool_name_from_content(content)
-        status = "✓" if result == expected else "✗"
-        print(f"  {status} {content[:50]}... -> {result} (expected {expected})")
-        if result == expected:
-            passed += 1
+        print(f"  {content[:50]}... -> {result}")
+        assert result == expected, f"Expected '{expected}', got '{result}'"
     
-    print(f"Task tool inference tests: {passed}/{len(test_cases)} passed")
-    return passed == len(test_cases)
+    print(f"Task tool inference tests: {len(test_cases)}/{len(test_cases)} passed")
 
 def test_task_tool_fixes():
     """Test Task tool fixes"""
@@ -45,24 +41,17 @@ def test_task_tool_fixes():
     print(f"  Input: {args_input}")
     
     # Apply fixes
-    fixed_args = engine.apply_fixes("task", args_input.copy(), "test-task")
+    _, fixed_args = engine.apply_fixes("task", args_input.copy(), "test-task")
     
     print(f"  Output: {fixed_args}")
     
-    if "subagent_type" in fixed_args and fixed_args["subagent_type"] == "general-purpose":
-        print("  ✓ Default subagent_type added successfully")
-        return True
-    else:
-        print("  ✗ Default subagent_type not added")
-        return False
+    assert "subagent_type" in fixed_args and fixed_args["subagent_type"] == "general-purpose", \
+        f"Default subagent_type not added correctly: {fixed_args}"
+    print("  ✓ Default subagent_type added successfully")
 
 if __name__ == "__main__":
-    inference_success = test_task_tool_inference()
-    fixes_success = test_task_tool_fixes()
+    test_task_tool_inference()
+    test_task_tool_fixes()
     
-    if inference_success and fixes_success:
-        print("\n🎉 All Task tool tests passed!")
-        sys.exit(0)
-    else:
-        print("\n❌ Some Task tool tests failed!")
-        sys.exit(1)
+    print("\n🎉 All Task tool tests passed!")
+    sys.exit(0)

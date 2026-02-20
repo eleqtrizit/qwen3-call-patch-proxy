@@ -20,16 +20,12 @@ def test_tool_name_inference():
     ]
     
     print("Testing tool name inference:")
-    passed = 0
     for content, expected in test_cases:
         result = infer_tool_name_from_content(content)
-        status = "✓" if result == expected else "✗"
-        print(f"  {status} {content[:30]}... -> {result} (expected {expected})")
-        if result == expected:
-            passed += 1
+        print(f"  {content[:30]}... -> {result}")
+        assert result == expected, f"Expected '{expected}', got '{result}' for: {content[:50]}"
     
-    print(f"Tool inference tests: {passed}/{len(test_cases)} passed\n")
-    return passed == len(test_cases)
+    print(f"Tool inference tests: {len(test_cases)}/{len(test_cases)} passed\n")
 
 def test_fragment_consolidation():
     """Test fragment consolidation"""
@@ -54,26 +50,17 @@ def test_fragment_consolidation():
     print(f"  Inferred tool: {tool_name}")
     
     # Test parsing
-    try:
-        import json
-        parsed = json.loads(consolidated)
-        print(f"  Parsed successfully: {type(parsed)}")
-        print(f"  Has todos param: {'todos' in parsed}")
-        return True
-    except Exception as e:
-        print(f"  Parse failed: {e}")
-        return False
+    import json
+    parsed = json.loads(consolidated)
+    print(f"  Parsed successfully: {type(parsed)}")
+    print(f"  Has todos param: {'todos' in parsed}")
+    assert 'todos' in parsed, "Consolidated JSON missing 'todos' key"
 
 if __name__ == "__main__":
     print("Testing fragment processing improvements...\n")
     
-    all_passed = True
-    all_passed &= test_tool_name_inference()
-    all_passed &= test_fragment_consolidation()
+    test_tool_name_inference()
+    test_fragment_consolidation()
     
-    if all_passed:
-        print("🎉 All fragment processing tests passed!")
-        sys.exit(0)
-    else:
-        print("❌ Some tests failed!")
-        sys.exit(1)
+    print("🎉 All fragment processing tests passed!")
+    sys.exit(0)

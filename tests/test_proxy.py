@@ -24,16 +24,14 @@ def test_json_completion():
     ]
     
     print("Testing JSON completion detection:")
-    passed = 0
     for json_str, expected in test_cases:
         result = is_json_complete(json_str)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{json_str[:30]}...' -> {result} (expected {expected})")
-        if result == expected:
-            passed += 1
+        assert result == expected, \
+            f"JSON completion mismatch for '{json_str[:50]}': expected {expected}, got {result}"
     
-    print(f"JSON completion tests: {passed}/{len(test_cases)} passed\n")
-    return passed == len(test_cases)
+    print(f"JSON completion tests: {len(test_cases)}/{len(test_cases)} passed\n")
 
 def test_fix_engine():
     """Test the ToolFixEngine"""
@@ -44,65 +42,46 @@ def test_fix_engine():
     
     # Test TodoWrite fix
     test_args = {"todos": '[{"id": "1", "content": "test", "status": "pending"}]'}
-    fixed_args = engine.apply_fixes("todowrite", test_args, "test-req")
+    _, fixed_args = engine.apply_fixes("todowrite", test_args, "test-req")
     
-    if isinstance(fixed_args["todos"], list):
-        print("  ✓ TodoWrite todos string converted to array")
-    else:
-        print("  ✗ TodoWrite fix failed")
-        return False
+    assert isinstance(fixed_args["todos"], list), \
+        f"TodoWrite fix failed: todos is not a list: {type(fixed_args['todos'])}"
+    print("  ✓ TodoWrite todos string converted to array")
     
     # Test Bash fix
     test_args = {"command": "ls -la"}
-    fixed_args = engine.apply_fixes("bash", test_args, "test-req")
+    _, fixed_args = engine.apply_fixes("bash", test_args, "test-req")
     
-    if "description" in fixed_args and fixed_args["description"]:
-        print("  ✓ Bash description added")
-    else:
-        print("  ✗ Bash description fix failed")
-        return False
+    assert "description" in fixed_args and fixed_args["description"], \
+        f"Bash description fix failed: {fixed_args}"
+    print("  ✓ Bash description added")
     
     # Test case insensitivity
     test_args = {"command": "echo test"}
-    fixed_args = engine.apply_fixes("BASH", test_args, "test-req")
+    _, fixed_args = engine.apply_fixes("BASH", test_args, "test-req")
     
-    if "description" in fixed_args:
-        print("  ✓ Case-insensitive tool matching works")
-    else:
-        print("  ✗ Case-insensitive matching failed")
-        return False
+    assert "description" in fixed_args, \
+        f"Case-insensitive matching failed: {fixed_args}"
+    print("  ✓ Case-insensitive tool matching works")
     
     print("ToolFixEngine tests: All passed\n")
-    return True
 
 def test_yaml_config():
     """Test YAML configuration loading"""
     print("Testing YAML configuration:")
     
-    try:
-        engine = ToolFixEngine(CONFIG_FILE)
-        if engine.config and 'tools' in engine.config:
-            print("  ✓ YAML configuration loaded successfully")
-            print(f"  ✓ Found {len(engine.config['tools'])} configured tools")
-            return True
-        else:
-            print("  ✗ YAML configuration missing required structure")
-            return False
-    except Exception as e:
-        print(f"  ✗ YAML configuration loading failed: {e}")
-        return False
+    engine = ToolFixEngine(CONFIG_FILE)
+    assert engine.config and 'tools' in engine.config, \
+        "YAML configuration missing required structure"
+    print("  ✓ YAML configuration loaded successfully")
+    print(f"  ✓ Found {len(engine.config['tools'])} configured tools")
 
 if __name__ == "__main__":
     print("Running proxy functionality tests...\n")
     
-    all_passed = True
-    all_passed &= test_json_completion()
-    all_passed &= test_fix_engine() 
-    all_passed &= test_yaml_config()
+    test_json_completion()
+    test_fix_engine()
+    test_yaml_config()
     
-    if all_passed:
-        print("🎉 All tests passed!")
-        sys.exit(0)
-    else:
-        print("❌ Some tests failed!")
-        sys.exit(1)
+    print("🎉 All tests passed!")
+    sys.exit(0)

@@ -55,7 +55,6 @@ def test_all_tools():
     ]
     
     print("Testing tool name inference for all supported tools:")
-    passed = 0
     total = len(test_cases)
     
     for i, (content, expected) in enumerate(test_cases, 1):
@@ -63,14 +62,9 @@ def test_all_tools():
         status = "✓" if result == expected else "✗"
         tool_desc = expected if expected else "unknown"
         print(f"  {i:2d}. {status} {tool_desc:12s} -> {result:12s} | {content[:60]}...")
-        
-        if result == expected:
-            passed += 1
-        else:
-            print(f"      Expected '{expected}', got '{result}'")
+        assert result == expected, f"Expected '{expected}', got '{result}' for: {content[:70]}"
     
-    print(f"\nTool inference tests: {passed}/{total} passed")
-    return passed == total
+    print(f"\nTool inference tests: {total}/{total} passed")
 
 if __name__ == "__main__":
     success = test_all_tools()

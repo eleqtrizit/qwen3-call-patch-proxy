@@ -27,11 +27,9 @@ async def test_task_detection():
     tool_name = infer_tool_name_from_content(failing_content)
     print(f"Inferred tool name: '{tool_name}'")
     
-    if tool_name == "task":
-        print("✓ Tool name correctly inferred as 'task'")
-    else:
-        print(f"✗ Tool name should be 'task' but got '{tool_name}'")
-        return False
+    assert tool_name == "task", \
+        f"Tool name should be 'task' but got '{tool_name}'"
+    print("✓ Tool name correctly inferred as 'task'")
     
     # Create request state
     request_id = "test-task-detection"
@@ -60,41 +58,30 @@ async def test_task_detection():
         # Process the event
         fixed_event = await process_sse_event(event, request_id)
         
-        # Check the result
-        if "tool_calls" in fixed_event["choices"][0]["delta"]:
-            tool_calls = fixed_event["choices"][0]["delta"]["tool_calls"]
-            if len(tool_calls) == 1:
-                tool_call = tool_calls[0]
-                call_id = tool_call.get("id", "")
-                function_name = tool_call.get("function", {}).get("name", "")
-                
-                print(f"Generated tool call:")
-                print(f"  ID: {call_id}")
-                print(f"  Function name: '{function_name}'")
-                
-                if function_name == "task":
-                    print("✓ Function name correctly set to 'task'")
-                    
-                    # Verify arguments are valid JSON
-                    args_str = tool_call.get("function", {}).get("arguments", "")
-                    try:
-                        args = json.loads(args_str)
-                        print("✓ Arguments are valid JSON")
-                        if "subagent_type" in args:
-                            print(f"✓ subagent_type: {args['subagent_type']}")
-                        return True
-                    except json.JSONDecodeError as e:
-                        print(f"✗ Arguments are not valid JSON: {e}")
-                        return False
-                else:
-                    print(f"✗ Function name should be 'task' but got '{function_name}'")
-                    return False
-            else:
-                print(f"✗ Expected 1 tool call, got {len(tool_calls)}")
-                return False
-        else:
-            print("✗ No tool_calls in fixed event")
-            return False
+        delta = fixed_event["choices"][0]["delta"]
+        assert "tool_calls" in delta, "No tool_calls in fixed event"
+        
+        tool_calls = delta["tool_calls"]
+        assert len(tool_calls) == 1, f"Expected 1 tool call, got {len(tool_calls)}"
+        
+        tool_call = tool_calls[0]
+        call_id = tool_call.get("id", "")
+        function_name = tool_call.get("function", {}).get("name", "")
+        
+        print(f"Generated tool call:")
+        print(f"  ID: {call_id}")
+        print(f"  Function name: '{function_name}'")
+        
+        assert function_name == "task", \
+            f"Function name should be 'task' but got '{function_name}'"
+        print("✓ Function name correctly set to 'task'")
+        
+        # Verify arguments are valid JSON
+        args_str = tool_call.get("function", {}).get("arguments", "")
+        args = json.loads(args_str)
+        print("✓ Arguments are valid JSON")
+        if "subagent_type" in args:
+            print(f"✓ subagent_type: {args['subagent_type']}")
             
     finally:
         # Cleanup
@@ -104,14 +91,10 @@ async def test_task_detection():
 async def main():
     print("Testing task tool detection for the failing scenario...\n")
     
-    success = await test_task_detection()
+    await test_task_detection()
     
-    if success:
-        print("\n🎉 Task detection test passed!")
-        return 0
-    else:
-        print("\n❌ Task detection test failed!")
-        return 1
+    print("\n🎉 Task detection test passed!")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

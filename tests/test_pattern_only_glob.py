@@ -31,21 +31,15 @@ def test_pattern_only_inference():
     ]
     
     print("Testing pattern-only tool inference:")
-    passed = 0
     total = len(test_cases)
     
     for i, (content, expected) in enumerate(test_cases, 1):
         result = infer_tool_name_from_content(content)
         status = "✓" if result == expected else "✗"
         print(f"  {i}. {status} {expected:10s} -> {result:10s} | {content[:50]}...")
-        
-        if result == expected:
-            passed += 1
-        else:
-            print(f"       Expected '{expected}', got '{result}'")
+        assert result == expected, f"Expected '{expected}', got '{result}' for: {content[:60]}"
     
-    print(f"\nPattern inference tests: {passed}/{total} passed")
-    return passed == total
+    print(f"\nPattern inference tests: {total}/{total} passed")
 
 if __name__ == "__main__":
     success = test_pattern_only_inference()

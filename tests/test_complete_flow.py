@@ -75,12 +75,9 @@ async def test_complete_todowrite_flow():
                 print(f"      Buffer {buf_id}: {len(buf.content)} chars, tool: {buf.tool_name}")
         
         # Check final state
-        if len(request_state.tool_buffers) == 0:
-            print("  ✓ All buffers processed successfully")
-            return True
-        else:
-            print(f"  ✗ {len(request_state.tool_buffers)} buffers remaining")
-            return False
+        assert len(request_state.tool_buffers) == 0, \
+            f"{len(request_state.tool_buffers)} buffers remaining after processing"
+        print("  ✓ All buffers processed successfully")
             
     finally:
         # Cleanup
@@ -94,37 +91,25 @@ async def test_tool_fix_application():
     # Test with TodoWrite content
     test_content = '{"todos": "[{\\"content\\": \\"Test\\", \\"status\\": \\"pending\\", \\"id\\": \\"1\\"}]"}'
     
-    try:
-        parsed = json.loads(test_content)
-        print(f"  Original todos type: {type(parsed['todos'])}")
-        
-        # Apply fixes
-        fixed = fix_engine.apply_fixes("todowrite", parsed, "test")
-        print(f"  Fixed todos type: {type(fixed['todos'])}")
-        
-        if isinstance(fixed['todos'], list):
-            print("  ✓ todos converted to array successfully")
-            return True
-        else:
-            print("  ✗ todos fix failed")
-            return False
-    except Exception as e:
-        print(f"  ✗ Error: {e}")
-        return False
+    parsed = json.loads(test_content)
+    print(f"  Original todos type: {type(parsed['todos'])}")
+    
+    # Apply fixes
+    _, fixed = fix_engine.apply_fixes("todowrite", parsed, "test")
+    print(f"  Fixed todos type: {type(fixed['todos'])}")
+    
+    assert isinstance(fixed['todos'], list), \
+        f"todos fix failed: expected list, got {type(fixed['todos'])}"
+    print("  ✓ todos converted to array successfully")
 
 async def main():
     print("Testing complete proxy flow...\n")
     
-    all_passed = True
-    all_passed &= await test_complete_todowrite_flow()
-    all_passed &= await test_tool_fix_application()
+    await test_complete_todowrite_flow()
+    await test_tool_fix_application()
     
-    if all_passed:
-        print("\n🎉 All complete flow tests passed!")
-        return 0
-    else:
-        print("\n❌ Some complete flow tests failed!")
-        return 1
+    print("\n🎉 All complete flow tests passed!")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

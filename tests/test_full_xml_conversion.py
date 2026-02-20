@@ -55,50 +55,28 @@ src/semantic_harvest/src/common/cli/commands/*.py
     # Check results
     delta = fixed_event["choices"][0]["delta"]
     
-    # Verify XML was converted to tool_calls
-    has_tool_calls = "tool_calls" in delta
-    content_cleared = delta.get("content", "") == ""
+    assert "tool_calls" in delta, "No tool_calls found after processing"
+    assert delta.get("content", "") == "", f"Content not cleared: {delta.get('content', '')!r}"
     
-    print(f"Has tool_calls after processing: {has_tool_calls}")
-    print(f"Content cleared: {content_cleared}")
+    tool_call = delta["tool_calls"][0]
+    function_name = tool_call["function"]["name"]
+    arguments_str = tool_call["function"]["arguments"]
     
-    if has_tool_calls:
-        tool_call = delta["tool_calls"][0]
-        function_name = tool_call["function"]["name"]
-        arguments_str = tool_call["function"]["arguments"]
-        
-        try:
-            arguments = json.loads(arguments_str)
-            pattern = arguments.get("pattern", "")
-            
-            print(f"Function name: {function_name}")
-            print(f"Pattern argument: {pattern}")
-            print(f"Call ID format: {tool_call['id']}")
-            print(f"Has index: {'index' in tool_call}")
-            
-            # Verify the conversion
-            expected_pattern = "src/semantic_harvest/src/common/cli/commands/*.py"
-            success = (
-                function_name == "glob" and
-                pattern == expected_pattern and
-                tool_call["id"].startswith("call_") and
-                "index" in tool_call and
-                content_cleared
-            )
-            
-            if success:
-                print("✓ XML-to-JSON conversion successful!")
-                return True
-            else:
-                print("✗ XML-to-JSON conversion failed validation")
-                return False
-                
-        except json.JSONDecodeError as e:
-            print(f"✗ Failed to parse arguments JSON: {e}")
-            return False
-    else:
-        print("✗ No tool_calls found after processing")
-        return False
+    arguments = json.loads(arguments_str)
+    pattern = arguments.get("pattern", "")
+    
+    print(f"Function name: {function_name}")
+    print(f"Pattern argument: {pattern}")
+    print(f"Call ID format: {tool_call['id']}")
+    print(f"Has index: {'index' in tool_call}")
+    
+    expected_pattern = "src/semantic_harvest/src/common/cli/commands/*.py"
+    assert function_name == "glob", f"Expected function 'glob', got '{function_name}'"
+    assert pattern == expected_pattern, f"Expected pattern '{expected_pattern}', got '{pattern}'"
+    assert tool_call["id"].startswith("call_"), f"Call ID doesn't start with 'call_': {tool_call['id']}"
+    assert "index" in tool_call, "Tool call missing 'index' field"
+    
+    print("✓ XML-to-JSON conversion successful!")
     
     # Cleanup
     if request_id in request_states:
@@ -131,46 +109,32 @@ async def test_mixed_content_with_xml():
     fixed_event = await process_sse_event(sse_event, request_id)
     delta = fixed_event["choices"][0]["delta"]
     
-    if "tool_calls" in delta:
-        tool_call = delta["tool_calls"][0]
-        args = json.loads(tool_call["function"]["arguments"])
-        
-        print(f"Function: {tool_call['function']['name']}")
-        print(f"Arguments: {args}")
-        print(f"Multiple parameters detected: {len(args) > 1}")
-        
-        success = (
-            tool_call["function"]["name"] == "bash" and
-            "command" in args and
-            "description" in args and
-            args["command"] == "ls -la"
-        )
-        
-        if success:
-            print("✓ Mixed content conversion successful!")
-        else:
-            print("✗ Mixed content conversion failed")
-        
-        # Cleanup
-        if request_id in request_states:
-            del request_states[request_id]
-            
-        return success
-    else:
-        print("✗ No tool_calls found in mixed content")
-        return False
+    assert "tool_calls" in delta, "No tool_calls found in mixed content"
+    
+    tool_call = delta["tool_calls"][0]
+    args = json.loads(tool_call["function"]["arguments"])
+    
+    print(f"Function: {tool_call['function']['name']}")
+    print(f"Arguments: {args}")
+    print(f"Multiple parameters detected: {len(args) > 1}")
+    
+    assert tool_call["function"]["name"] == "bash", \
+        f"Expected function 'bash', got '{tool_call['function']['name']}'"
+    assert "command" in args, f"Arguments missing 'command': {args}"
+    assert "description" in args, f"Arguments missing 'description': {args}"
+    assert args["command"] == "ls -la", f"Expected 'ls -la', got '{args['command']}'"
+    
+    print("✓ Mixed content conversion successful!")
+    
+    # Cleanup
+    if request_id in request_states:
+        del request_states[request_id]
 
 if __name__ == "__main__":
     async def run_tests():
-        test1 = await test_complete_xml_conversion()
-        test2 = await test_mixed_content_with_xml()
-        return test1 and test2
+        await test_complete_xml_conversion()
+        await test_mixed_content_with_xml()
     
-    success = asyncio.run(run_tests())
-    
-    if success:
-        print("\n🎉 All XML conversion flow tests passed!")
-        sys.exit(0)
-    else:
-        print("\n❌ Some XML conversion flow tests failed!")
-        sys.exit(1)
+    asyncio.run(run_tests())
+    print("\n🎉 All XML conversion flow tests passed!")
+    sys.exit(0)

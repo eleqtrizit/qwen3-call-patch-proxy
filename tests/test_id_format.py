@@ -47,54 +47,36 @@ async def test_id_format():
         
         # Check the result
         tool_calls = fixed_event["choices"][0]["delta"]["tool_calls"]
-        if len(tool_calls) == 1:
-            tool_call = tool_calls[0]
-            call_id = tool_call.get("id", "")
-            
-            print(f"  Generated ID: {call_id}")
-            print(f"  ID type: {type(call_id)}")
-            print(f"  ID length: {len(call_id)}")
-            
-            # Check if ID matches expected format: call_<24_hex_chars>
-            id_pattern = r"^call_[a-f0-9]{24}$"
-            if re.match(id_pattern, call_id):
-                print("  ✓ ID format matches OpenCode pattern")
-                
-                # Verify other required fields
-                if "index" in tool_call and isinstance(tool_call["index"], int):
-                    print("  ✓ Index field is present and numeric")
-                else:
-                    print("  ✗ Index field missing or wrong type")
-                    return False
-                
-                if "function" in tool_call and "name" in tool_call["function"]:
-                    print("  ✓ Function name is present")
-                else:
-                    print("  ✗ Function name missing")
-                    return False
-                
-                if "function" in tool_call and "arguments" in tool_call["function"]:
-                    args_str = tool_call["function"]["arguments"]
-                    try:
-                        args = json.loads(args_str)
-                        if isinstance(args.get("todos"), list):
-                            print("  ✓ Arguments are valid JSON with todos array")
-                            return True
-                        else:
-                            print("  ✗ Arguments don't have proper todos array")
-                            return False
-                    except json.JSONDecodeError:
-                        print("  ✗ Arguments are not valid JSON")
-                        return False
-                else:
-                    print("  ✗ Function arguments missing")
-                    return False
-            else:
-                print(f"  ✗ ID format doesn't match expected pattern: {id_pattern}")
-                return False
-        else:
-            print(f"  ✗ Expected 1 tool call, got {len(tool_calls)}")
-            return False
+        assert len(tool_calls) == 1, f"Expected 1 tool call, got {len(tool_calls)}"
+        
+        tool_call = tool_calls[0]
+        call_id = tool_call.get("id", "")
+        
+        print(f"  Generated ID: {call_id}")
+        print(f"  ID type: {type(call_id)}")
+        print(f"  ID length: {len(call_id)}")
+        
+        # Check if ID matches expected format: call_<24_hex_chars>
+        id_pattern = r"^call_[a-f0-9]{24}$"
+        assert re.match(id_pattern, call_id), \
+            f"ID format doesn't match expected pattern {id_pattern!r}: {call_id}"
+        print("  ✓ ID format matches OpenCode pattern")
+        
+        assert "index" in tool_call and isinstance(tool_call["index"], int), \
+            f"Index field missing or wrong type: {tool_call.get('index')}"
+        print("  ✓ Index field is present and numeric")
+        
+        assert "function" in tool_call and "name" in tool_call["function"], \
+            "Function name is missing"
+        print("  ✓ Function name is present")
+        
+        assert "function" in tool_call and "arguments" in tool_call["function"], \
+            "Function arguments missing"
+        args_str = tool_call["function"]["arguments"]
+        args = json.loads(args_str)
+        assert isinstance(args.get("todos"), list), \
+            f"Arguments don't have proper todos array: {args}"
+        print("  ✓ Arguments are valid JSON with todos array")
             
     finally:
         # Cleanup
@@ -104,14 +86,10 @@ async def test_id_format():
 async def main():
     print("Testing tool call ID format...\n")
     
-    success = await test_id_format()
+    await test_id_format()
     
-    if success:
-        print("\n🎉 ID format test passed!")
-        return 0
-    else:
-        print("\n❌ ID format test failed!")
-        return 1
+    print("\n🎉 ID format test passed!")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

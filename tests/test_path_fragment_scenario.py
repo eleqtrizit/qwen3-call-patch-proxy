@@ -96,7 +96,6 @@ async def test_path_fragment_scenario():
     
     print(f"Final buffer content: {final_content}")
     print(f"Inferred tool name: '{inferred_tool}'")
-    print(f"Tool inference working: {inferred_tool == 'list'}")
     
     # Check the request state
     state = request_states.get(request_id)
@@ -109,7 +108,8 @@ async def test_path_fragment_scenario():
     if request_id in request_states:
         del request_states[request_id]
     
-    return inferred_tool == 'list'
+    assert inferred_tool == 'list', f"Expected 'list', got '{inferred_tool}'"
+    print(f"Tool inference working: True")
 
 async def test_end_to_end_list_call():
     """Test that a fragmented list call results in a proper tool call for OpenCode"""
@@ -189,9 +189,7 @@ async def test_end_to_end_list_call():
         else:
             print(f"  → Fragments suppressed (expected)")
     
-    if not tool_call_event:
-        print("✗ No complete tool call generated")
-        return False
+    assert tool_call_event is not None, "No complete tool call generated"
     
     # Verify the tool call
     tool_call = tool_call_event["choices"][0]["delta"]["tool_calls"][0]
@@ -203,47 +201,29 @@ async def test_end_to_end_list_call():
     print(f"  Arguments: {tool_call['function']['arguments']}")
     
     # Parse and verify arguments
-    try:
-        args = json.loads(tool_call['function']['arguments'])
-        print(f"  Parsed args: {args}")
-        
-        has_path = "path" in args
-        path_correct = args.get("path") == "/home/user/project"
-        
-        success = (
-            tool_call['function']['name'] == 'list' and
-            tool_call['id'].startswith('call_') and
-            'index' in tool_call and
-            has_path and
-            path_correct
-        )
-        
-        if success:
-            print("\n✓ List tool call properly formatted for OpenCode!")
-        else:
-            print("\n✗ List tool call format issues detected")
-        
-        # Cleanup
-        if request_id in request_states:
-            del request_states[request_id]
-        
-        return success
-        
-    except json.JSONDecodeError as e:
-        print(f"✗ Failed to parse arguments: {e}")
-        return False
+    args = json.loads(tool_call['function']['arguments'])
+    print(f"  Parsed args: {args}")
+    
+    assert tool_call['function']['name'] == 'list', \
+        f"Expected function name 'list', got '{tool_call['function']['name']}'"
+    assert tool_call['id'].startswith('call_'), \
+        f"Call ID doesn't start with 'call_': {tool_call['id']}"
+    assert 'index' in tool_call, "Tool call missing 'index' field"
+    assert "path" in args, f"Arguments missing 'path': {args}"
+    assert args.get("path") == "/home/user/project", \
+        f"Expected '/home/user/project', got '{args.get('path')}'"
+    
+    print("\n✓ List tool call properly formatted for OpenCode!")
+    
+    # Cleanup
+    if request_id in request_states:
+        del request_states[request_id]
 
 if __name__ == "__main__":
     async def run_tests():
-        test1 = await test_path_fragment_scenario()
-        test2 = await test_end_to_end_list_call()
-        return test1 and test2
+        await test_path_fragment_scenario()
+        await test_end_to_end_list_call()
     
-    success = asyncio.run(run_tests())
-    
-    if success:
-        print("\n🎉 Path fragment scenario tests passed!")
-        sys.exit(0)
-    else:
-        print("\n❌ Some path fragment scenario tests failed!")
-        sys.exit(1)
+    asyncio.run(run_tests())
+    print("\n🎉 Path fragment scenario tests passed!")
+    sys.exit(0)

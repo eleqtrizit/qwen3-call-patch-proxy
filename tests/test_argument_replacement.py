@@ -48,37 +48,25 @@ async def test_argument_replacement():
         tool_calls = fixed_event["choices"][0]["delta"]["tool_calls"]
         print(f"  Fixed tool_calls count: {len(tool_calls)}")
         
-        if len(tool_calls) == 1:
-            tool_call = tool_calls[0]
-            print(f"  Fixed tool name: {tool_call['function']['name']}")
-            print(f"  Tool call has index: {'index' in tool_call}")
-            if 'index' in tool_call:
-                print(f"  Index value: {tool_call['index']}")
-            
-            # Parse the arguments to verify they're correct
-            args_str = tool_call['function']['arguments']
-            print(f"  Arguments string: {args_str[:100]}...")
-            
-            try:
-                args = json.loads(args_str)
-                if "todos" in args and isinstance(args["todos"], list):
-                    print("  ✓ Arguments are valid JSON with todos array")
-                    # Also check that index field is present
-                    if 'index' in tool_call:
-                        print("  ✓ Index field is present")
-                        return True
-                    else:
-                        print("  ✗ Index field is missing (required by OpenCode)")
-                        return False
-                else:
-                    print("  ✗ Arguments don't have proper todos array")
-                    return False
-            except json.JSONDecodeError as e:
-                print(f"  ✗ Arguments are not valid JSON: {e}")
-                return False
-        else:
-            print(f"  ✗ Expected 1 tool call, got {len(tool_calls)}")
-            return False
+        assert len(tool_calls) == 1, f"Expected 1 tool call, got {len(tool_calls)}"
+        
+        tool_call = tool_calls[0]
+        print(f"  Fixed tool name: {tool_call['function']['name']}")
+        print(f"  Tool call has index: {'index' in tool_call}")
+        if 'index' in tool_call:
+            print(f"  Index value: {tool_call['index']}")
+        
+        # Parse the arguments to verify they're correct
+        args_str = tool_call['function']['arguments']
+        print(f"  Arguments string: {args_str[:100]}...")
+        
+        args = json.loads(args_str)
+        assert "todos" in args and isinstance(args["todos"], list), \
+            f"Arguments don't have proper todos array: {args}"
+        print("  ✓ Arguments are valid JSON with todos array")
+
+        assert 'index' in tool_call, "Index field is missing (required by OpenCode)"
+        print("  ✓ Index field is present")
             
     finally:
         # Cleanup
@@ -88,14 +76,10 @@ async def test_argument_replacement():
 async def main():
     print("Testing argument replacement fix...\n")
     
-    success = await test_argument_replacement()
+    await test_argument_replacement()
     
-    if success:
-        print("\n🎉 Argument replacement test passed!")
-        return 0
-    else:
-        print("\n❌ Argument replacement test failed!")
-        return 1
+    print("\n🎉 Argument replacement test passed!")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
